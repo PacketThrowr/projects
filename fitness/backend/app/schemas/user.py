@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -33,3 +33,11 @@ class Token(BaseModel):
 class LoginSchema(BaseModel):
     username: str
     password: str
+
+class UserUpdate(BaseModel):
+    username: str = None
+    email: EmailStr = None
+    password: str = None
+
+    class Config:
+        orm_mode = True

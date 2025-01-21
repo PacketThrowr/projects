@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.user import User
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 
 async def get_user_by_username(db: AsyncSession, username: str):
     result = await db.execute(select(User).where(User.username == username))
@@ -27,3 +27,33 @@ async def authenticate_user(db: AsyncSession, username: str, password: str):
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
+
+async def get_user_by_id(db: AsyncSession, user_id: int):
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalars().first()
+
+async def update_user(db: AsyncSession, user_id: int, user_update: UserUpdate):
+    db_user = await get_user_by_id(db, user_id)
+    if not db_user:
+        raise ValueError("User not found")
+
+    # Update user fields
+    for key, value in user_update.dict(exclude_unset=True).items():
+        setattr(db_user, key, value)
+
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+async def delete_user(db: AsyncSession, user_id: int):
+    db_user = await get_user_by_id(db, user_id)
+    if not db_user:
+        raise ValueError("User not found")
+
+    await db.delete(db_user)
+    await db.commit()
+
+async def get_all_users(db: AsyncSession) -> list[User]:
+    """Fetch all users."""
+    result = await db.execute(select(User))
+    return result.scalars().all()

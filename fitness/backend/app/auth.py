@@ -5,7 +5,7 @@ from app.adapters.user import get_user_db
 from app.schemas.user import UserRead, UserCreate
 from app.models.user import User
 from app.utils.security import verify_password
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from typing import Any
 
 SECRET_KEY = "your_secret_key"  # Replace with a strong and secure secret key
@@ -60,3 +60,9 @@ fastapi_users = FastAPIUsers[User, int](
 
 # Dependency for getting the current active user
 current_active_user = fastapi_users.current_user(active=True)
+
+# Dependency to check if the current user is a superuser
+async def is_superuser(user: User = Depends(current_active_user)):
+    if not user.is_superuser:  # Ensure `is_superuser` is a property of your User model
+        raise HTTPException(status_code=403, detail="Not authorized as a superuser")
+    return user
