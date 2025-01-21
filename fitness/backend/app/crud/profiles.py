@@ -4,6 +4,8 @@ from sqlalchemy.future import select
 from datetime import datetime
 from app.models.profile import Profile, Gender, MeasurementSystem
 from app.schemas.profile import ProfileBase, WeightEntry, ProfileCreate, ProfileUpdate,  ProfileResponse
+from app.utils import get_units_for_country
+from sqlalchemy.orm.attributes import flag_modified
 
 async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
     # Validate and process the input data
@@ -68,14 +70,6 @@ async def update_profile(db: AsyncSession, profile_id: int, profile_update: Prof
     # Update height if both feet and inches are provided
     if profile_update.height_feet is not None and profile_update.height_inches is not None:
         db_profile.height_cm = (profile_update.height_feet * 30.48) + (profile_update.height_inches * 2.54)
-
-    # Update weight entries with recalculated BMI
-    if profile_update.weight:
-        for entry in db_profile.weight:
-            weight_kg = entry["value"]
-            if db_profile.units == "imperial":
-                weight_kg = round(weight_kg * 0.453592, 2)
-            entry["bmi"] = round(weight_kg / ((db_profile.height_cm / 100) ** 2), 2)
 
     # Update other fields
     if profile_update.name:
@@ -159,18 +153,19 @@ async def update_weight_entry(
     # Convert weight to kilograms if in imperial units
     weight_kg = new_weight.value
     if db_profile.units == "imperial":
-        weight_kg = round(weight_kg * 0.453592, 2)  # Convert lbs to kg
+        weight_kg = round(new_weight.value * 0.453592, 2)  # Convert lbs to kg
 
     # Calculate BMI
     height_m = db_profile.height_cm / 100  # Convert height from cm to meters
     bmi = round(weight_kg / (height_m ** 2), 2)
 
     # Update the weight entry
-    weight_entry["value"] = new_weight.value  # Store the original input value
+    weight_entry["value"] = weight_kg  # Store the weight in kilograms
     weight_entry["bmi"] = bmi
 
-    # Update the profile
-    db_profile.weight = existing_weights
+    # Update the profile weights
+    db_profile.weight = existing_weights  # Reassign the list to trigger SQLAlchemy tracking
+    flag_modified(db_profile, "weight")  # Mark the JSON field as modified
 
     # Commit and refresh
     db.add(db_profile)

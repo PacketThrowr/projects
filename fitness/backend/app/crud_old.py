@@ -126,28 +126,3 @@ def add_exercise_to_workout(db: Session, workout_id: int, exercise_name: str):
     db.refresh(db_workout_exercise)
 
     return db_workout_exercise
-
-
-def add_progress_picture(db: Session, profile_id: int, date: date, weight: float, image_path: str):
-    db_picture = ProgressPicture(
-        profile_id=profile_id,
-        date=date,
-        weight=weight,
-        image_path=image_path,
-    )
-    db.add(db_picture)
-    db.commit()
-    db.refresh(db_picture)
-    return db_picture
-
-
-def get_progress_pictures(db: Session, profile_id: int):
-    return db.query(ProgressPicture).filter(ProgressPicture.profile_id == profile_id).all()
-
-
-def delete_progress_picture(db: Session, picture_id: int):
-    db_picture = db.query(ProgressPicture).filter(ProgressPicture.id == picture_id).first()
-    if db_picture:
-        db.delete(db_picture)
-        db.commit()
-    return db_picture

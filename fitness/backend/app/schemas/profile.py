@@ -60,15 +60,16 @@ class ProfileBase(BaseModel):
 class ProfileCreate(ProfileBase):
     pass  # Extend the base ProfileBase
 
-class ProfileUpdate(ProfileBase):
-    name: str
-    gender: str
-    height_feet: int = None
-    height_inches: int = None
-    height_cm: Optional[float] = None
-    country: str
-    units: str
-    weight: list[WeightEntry]
+class ProfileUpdate(BaseModel):
+    name: Optional[str]
+    gender: Optional[str]
+    height_feet: Optional[int]
+    height_inches: Optional[int]
+    country: Optional[str]
+    units: Optional[MeasurementSystem]
+
+    class Config:
+        from_attributes = True
 
 class Profile(ProfileBase):
     id: int  # This is to reflect the database column
