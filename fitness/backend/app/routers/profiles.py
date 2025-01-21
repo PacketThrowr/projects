@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
-from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry
+from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry, ProfileResponse
 from app import crud
 from app.auth import current_active_user
 from app.models.user import User
@@ -13,7 +13,7 @@ async def get_db() -> AsyncSession:
     async with async_session_maker() as session:
         yield session
 
-@router.post("/profiles/", response_model=Profile)
+@router.post("/profiles/", response_model=ProfileResponse)
 async def create_profile(
     profile: ProfileCreate,
     db: AsyncSession = Depends(get_db),
@@ -24,23 +24,32 @@ async def create_profile(
 
 
 
-@router.get("/profiles/", response_model=list[Profile])
+@router.get("/profiles/", response_model=list[ProfileResponse])
 async def read_profiles(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
-    return await crud.get_profiles_for_user(db, user_id=user.id)
+    # Fetch profiles using your CRUD function
+    profiles = await crud.get_profiles_for_user(db, user_id=user.id)
     
-@router.get("/profiles/{profile_id}/", response_model=Profile)
+    # Convert SQLAlchemy models to Pydantic models
+    return [ProfileResponse.from_orm(profile) for profile in profiles]
+    
+@router.get("/profiles/{profile_id}/", response_model=ProfileResponse)
 async def read_profile(
     profile_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
+    # Fetch the profile from the database
     db_profile = await crud.get_profile_by_id(db, profile_id)
+
+    # Check if the profile exists and belongs to the current user
     if not db_profile or db_profile.user_id != user.id:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return db_profile
+
+    # Convert SQLAlchemy model to Pydantic response model
+    return ProfileResponse.from_orm(db_profile)
 
 @router.put("/profiles/{profile_id}/", response_model=Profile)
 async def update_profile(

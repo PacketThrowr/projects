@@ -19,7 +19,7 @@ class Profile(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # Link to User
     name = Column(String, nullable=False)
     gender = Column(String, nullable=False)
-    height = Column(Float, nullable=False)  # Stored in cm
+    height_cm = Column(Float, nullable=False)  # Stored in cm
     weight = Column(JSON, nullable=False)  # Historical weights
     country = Column(String, nullable=False)
     units = Column(String, nullable=False)

@@ -5,7 +5,7 @@ from app.schemas.exercise import ExerciseCreate
 from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 from app.schemas.workout import WorkoutCreate
 from app.models.profile import Profile, Gender, MeasurementSystem
-from app.schemas.profile import ProfileBase, WeightEntry, ProfileCreate, ProfileUpdate
+from app.schemas.profile import ProfileBase, WeightEntry, ProfileCreate, ProfileUpdate,  ProfileResponse
 from app.utils import get_units_for_country
 from app.models.progress_picture import ProgressPicture
 from datetime import date
@@ -129,51 +129,45 @@ def add_exercise_to_workout(db: Session, workout_id: int, exercise_name: str):
     return db_workout_exercise
 
 async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
-    # Ensure that the units and gender are explicitly converted to strings
-    units_enum = profile_data.units.value  # This will give 'imperial' or 'metric'
-    gender_enum = profile_data.gender.value  # This will give 'male', 'female', or 'not_applicable'
+    # Validate and process the input data
+    validated_data = ProfileBase(**profile_data.dict())
 
-    # Convert height from feet and inches to centimeters if provided
-    height_cm = profile_data.height_feet * 30.48 + profile_data.height_inches * 2.54 if profile_data.height_feet else None
+    # Extract necessary data
+    units_enum = validated_data.units.value
+    gender_enum = validated_data.gender.value
+    height_cm = validated_data.height_cm
 
+    # Process weight entries
     weight_data = []
-    for entry in profile_data.weight:
-        weight_value = entry.value
-
-        # If the units are imperial, convert pounds to kilograms
-        if units_enum == "imperial":
-            weight_kg = round(weight_value * 0.453592, 2)  # Convert pounds to kilograms
-        else:
-            weight_kg = weight_value  # If units are metric, no conversion needed
-
-        # Convert height from cm to meters for BMI calculation
-        height_m = height_cm / 100  # Convert cm to meters
-
-        # Calculate BMI using the formula: BMI = weight(kg) / height(m)^2
-        bmi = round(weight_kg / (height_m ** 2), 2)
-
-        # Add the weight data with BMI
+    for entry in validated_data.weight:
+        weight_kg = (
+            round(entry.value * 0.453592, 2) if units_enum == "imperial" else entry.value
+        )
+        bmi = round(weight_kg / ((height_cm / 100) ** 2), 2)
         weight_data.append({
             "date": entry.date,
             "value": weight_kg,
-            "bmi": bmi
+            "bmi": bmi,
         })
 
-    # Create the profile instance using strings for gender and units
+    # Create the new profile instance
     new_profile = Profile(
         user_id=user_id,
-        name=profile_data.name,
-        gender=gender_enum,  # Pass the string value of gender ('male', 'female', 'not_applicable')
-        height=height_cm,
-        weight=weight_data,  # Serialized weight data
-        country=profile_data.country,
-        units=units_enum  # Store as string ('imperial' or 'metric')
+        name=validated_data.name,
+        gender=gender_enum,
+        height_cm=height_cm,
+        weight=weight_data,
+        country=validated_data.country,
+        units=units_enum,
     )
 
+    # Save to the database
     db.add(new_profile)
     await db.commit()
     await db.refresh(new_profile)
-    return new_profile
+
+    # Convert SQLAlchemy model to Pydantic response
+    return ProfileResponse.from_orm(new_profile)
 
 
 
