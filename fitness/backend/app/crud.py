@@ -184,46 +184,57 @@ async def get_profile_by_id(db: AsyncSession, profile_id: int):
     return result.scalars().first()  # Use scalars() to get the first result
 
 async def update_profile(db: AsyncSession, profile_id: int, profile_update: ProfileUpdate):
-    # Fetch the profile by ID asynchronously
+    # Fetch the profile by ID
     db_profile = await get_profile_by_id(db, profile_id)
     if not db_profile:
-        return None
+        raise ValueError(f"Profile with ID {profile_id} does not exist")
 
-    # Update height if provided
+    # Update height if both feet and inches are provided
     if profile_update.height_feet is not None and profile_update.height_inches is not None:
-        db_profile.height = (profile_update.height_feet * 30.48) + (profile_update.height_inches * 2.54)
+        db_profile.height_cm = (profile_update.height_feet * 30.48) + (profile_update.height_inches * 2.54)
 
     # Update weight entries with recalculated BMI
-    for entry in db_profile.weight:
-        weight_kg = entry["value"]
-        if db_profile.units == MeasurementSystem.IMPERIAL:
-            weight_kg = round(weight_kg * 0.453592, 2)
-        entry["bmi"] = calculate_bmi(weight_kg, db_profile.height)
+    if profile_update.weight:
+        for entry in db_profile.weight:
+            weight_kg = entry["value"]
+            if db_profile.units == "imperial":
+                weight_kg = round(weight_kg * 0.453592, 2)
+            entry["bmi"] = round(weight_kg / ((db_profile.height_cm / 100) ** 2), 2)
 
-    db_profile.name = profile_update.name
-    db_profile.gender = profile_update.gender
-    db_profile.country = profile_update.country
-    db_profile.units = get_units_for_country(profile_update.country)
+    # Update other fields
+    if profile_update.name:
+        db_profile.name = profile_update.name
+    if profile_update.gender:
+        db_profile.gender = profile_update.gender
+    if profile_update.country:
+        db_profile.country = profile_update.country
+        db_profile.units = get_units_for_country(profile_update.country)  # Update units based on the country
 
-    # Asynchronous commit
+    # Commit changes
+    db.add(db_profile)
     await db.commit()
     await db.refresh(db_profile)
+
     return db_profile
 
-def delete_profile(db: Session, profile_id: int):
-    db_profile = get_profile_by_id(db, profile_id)
-    if not db_profile:
-        return None
+async def delete_profile(db: AsyncSession, profile_id: int):
+    db_profile = await db.execute(
+        select(Profile).filter(Profile.id == profile_id)
+    )
+    db_profile = db_profile.scalars().first()
 
-    db.delete(db_profile)
-    db.commit()
+    if not db_profile:
+        return False
+
+    await db.delete(db_profile)
+    await db.commit()
     return True
 
 async def get_weights_for_profile(db: AsyncSession, db_profile: Profile):
     # Ensure the profile has a valid weights field
     weights = db_profile.weight or []
     return weights
-    
+
 async def delete_weight_entry(db: AsyncSession, db_profile: Profile, date: str):
     from datetime import datetime
 
