@@ -219,13 +219,13 @@ def delete_profile(db: Session, profile_id: int):
     db.commit()
     return True
 
-def delete_weight_entry(db: Session, profile_id: int, date: str):
+async def get_weights_for_profile(db: AsyncSession, db_profile: Profile):
+    # Ensure the profile has a valid weights field
+    weights = db_profile.weight or []
+    return weights
+    
+async def delete_weight_entry(db: AsyncSession, db_profile: Profile, date: str):
     from datetime import datetime
-
-    # Retrieve the profile
-    db_profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not db_profile:
-        raise ValueError(f"Profile with ID {profile_id} does not exist")
 
     # Parse the date to validate the format
     try:
@@ -244,8 +244,54 @@ def delete_weight_entry(db: Session, profile_id: int, date: str):
 
     # Update the profile
     db_profile.weight = updated_weights
-    db.commit()
-    db.refresh(db_profile)
+
+    # Commit and refresh
+    db.add(db_profile)
+    await db.commit()
+    await db.refresh(db_profile)
+
+    return db_profile
+
+async def update_weight_entry(
+    db: AsyncSession, db_profile: Profile, date: str, new_weight: WeightEntry
+):
+    from datetime import datetime
+
+    # Parse the date to validate the format
+    try:
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("Invalid date format. Expected format: YYYY-MM-DD")
+
+    # Ensure the weight entry exists for the specified date
+    existing_weights = db_profile.weight or []
+    weight_entry = next(
+        (entry for entry in existing_weights if entry["date"] == target_date.strftime("%Y-%m-%d")), None
+    )
+    if not weight_entry:
+        raise ValueError(f"No weight entry found for date {date}")
+
+    # Convert weight to kilograms if in imperial units
+    weight_kg = new_weight.value
+    if db_profile.units == "imperial":
+        weight_kg = round(weight_kg * 0.453592, 2)  # Convert lbs to kg
+
+    # Calculate BMI
+    height_m = db_profile.height_cm / 100  # Convert height from cm to meters
+    bmi = round(weight_kg / (height_m ** 2), 2)
+
+    # Update the weight entry
+    weight_entry["value"] = new_weight.value  # Store the original input value
+    weight_entry["bmi"] = bmi
+
+    # Update the profile
+    db_profile.weight = existing_weights
+
+    # Commit and refresh
+    db.add(db_profile)
+    await db.commit()
+    await db.refresh(db_profile)
+
     return db_profile
 
 def calculate_bmi(weight: float, height_cm: float) -> float:

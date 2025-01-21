@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
-from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry, ProfileResponse
+from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry, ProfileResponse, WeightEntryResponse
 from app import crud
 from app.auth import current_active_user
 from app.models.user import User
@@ -77,22 +77,23 @@ async def delete_profile(
     success = await crud.delete_profile(db, profile_id)
     return {"message": f"Profile with ID {profile_id} deleted"}
 
-
-@router.delete("/profiles/{profile_id}/weights/{date}/", response_model=Profile)
-async def delete_weight(
+@router.get("/profiles/{profile_id}/weights/", response_model=list[WeightEntryResponse])
+async def get_weights(
     profile_id: int,
-    date: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
+    # Fetch the profile
     db_profile = await crud.get_profile_by_id(db, profile_id)
     if not db_profile or db_profile.user_id != user.id:
         raise HTTPException(status_code=404, detail="Profile not found")
+
     try:
-        updated_profile = await crud.delete_weight_entry(db, profile_id, date)
-        return updated_profile
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Retrieve the weights
+        weights = await crud.get_weights_for_profile(db, db_profile)
+        return weights
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error retrieving weights")
 
 @router.post("/profiles/{profile_id}/weights/", response_model=ProfileResponse)
 async def add_weight(
@@ -109,6 +110,45 @@ async def add_weight(
     try:
         # Add the weight entry
         updated_profile = await crud.add_weight_to_profile(db, db_profile, weight)
+        return ProfileResponse.from_orm(updated_profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/profiles/{profile_id}/weights/{date}/", response_model=ProfileResponse)
+async def update_weight(
+    profile_id: int,
+    date: str,
+    new_weight: WeightEntry,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    # Fetch the profile
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    try:
+        # Update the weight entry
+        updated_profile = await crud.update_weight_entry(db, db_profile, date, new_weight)
+        return ProfileResponse.from_orm(updated_profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/profiles/{profile_id}/weights/{date}/", response_model=ProfileResponse)
+async def delete_weight(
+    profile_id: int,
+    date: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    # Fetch the profile
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    try:
+        # Delete the weight entry
+        updated_profile = await crud.delete_weight_entry(db, db_profile, date)
         return ProfileResponse.from_orm(updated_profile)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
