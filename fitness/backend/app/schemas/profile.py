@@ -29,7 +29,13 @@ class ProfileCreate(ProfileBase):
     pass  # Extend the base ProfileBase
 
 class ProfileUpdate(ProfileBase):
-    pass  # Optionally extend with update logic
+    name: str
+    gender: str
+    height_feet: int = None
+    height_inches: int = None
+    country: str
+    units: str
+    weight: list[WeightEntry]
 
 class Profile(ProfileBase):
     id: int  # This is to reflect the database column

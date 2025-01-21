@@ -5,7 +5,7 @@ from app.schemas.exercise import ExerciseCreate
 from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 from app.schemas.workout import WorkoutCreate
 from app.models.profile import Profile, Gender, MeasurementSystem
-from app.schemas.profile import ProfileBase, WeightEntry, ProfileCreate
+from app.schemas.profile import ProfileBase, WeightEntry, ProfileCreate, ProfileUpdate
 from app.utils import get_units_for_country
 from app.models.progress_picture import ProgressPicture
 from datetime import date
@@ -136,15 +136,28 @@ async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
     # Convert height from feet and inches to centimeters if provided
     height_cm = profile_data.height_feet * 30.48 + profile_data.height_inches * 2.54 if profile_data.height_feet else None
 
-    # Convert weight entries to a list of dictionaries
-    weight_data = [
-        {
+    weight_data = []
+    for entry in profile_data.weight:
+        weight_value = entry.value
+
+        # If the units are imperial, convert pounds to kilograms
+        if units_enum == "imperial":
+            weight_kg = round(weight_value * 0.453592, 2)  # Convert pounds to kilograms
+        else:
+            weight_kg = weight_value  # If units are metric, no conversion needed
+
+        # Convert height from cm to meters for BMI calculation
+        height_m = height_cm / 100  # Convert cm to meters
+
+        # Calculate BMI using the formula: BMI = weight(kg) / height(m)^2
+        bmi = round(weight_kg / (height_m ** 2), 2)
+
+        # Add the weight data with BMI
+        weight_data.append({
             "date": entry.date,
-            "value": entry.value,
-            "bmi": entry.bmi
-        }
-        for entry in profile_data.weight
-    ]
+            "value": weight_kg,
+            "bmi": bmi
+        })
 
     # Create the profile instance using strings for gender and units
     new_profile = Profile(
@@ -170,12 +183,14 @@ async def get_profiles_for_user(db: AsyncSession, user_id: int):
     return result.scalars().all()
 
 
-def get_profile_by_id(db: Session, profile_id: int):
-    return db.query(Profile).filter(Profile.id == profile_id).first()
+async def get_profile_by_id(db: AsyncSession, profile_id: int):
+    # Use select() with AsyncSession for async queries
+    result = await db.execute(select(Profile).filter(Profile.id == profile_id))
+    return result.scalars().first()  # Use scalars() to get the first result
 
-'''
-def update_profile(db: Session, profile_id: int, profile_update: ProfileUpdate):
-    db_profile = get_profile_by_id(db, profile_id)
+async def update_profile(db: AsyncSession, profile_id: int, profile_update: ProfileUpdate):
+    # Fetch the profile by ID asynchronously
+    db_profile = await get_profile_by_id(db, profile_id)
     if not db_profile:
         return None
 
@@ -195,10 +210,10 @@ def update_profile(db: Session, profile_id: int, profile_update: ProfileUpdate):
     db_profile.country = profile_update.country
     db_profile.units = get_units_for_country(profile_update.country)
 
-    db.commit()
-    db.refresh(db_profile)
+    # Asynchronous commit
+    await db.commit()
+    await db.refresh(db_profile)
     return db_profile
-'''
 
 def delete_profile(db: Session, profile_id: int):
     db_profile = get_profile_by_id(db, profile_id)
