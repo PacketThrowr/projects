@@ -129,13 +129,11 @@ def add_exercise_to_workout(db: Session, workout_id: int, exercise_name: str):
     return db_workout_exercise
 
 async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
-    # Convert units to the enum value by accessing the `value` attribute
-    units_enum = MeasurementSystem[profile_data.units.value.upper()]
+    # Ensure that the units and gender are explicitly converted to strings
+    units_enum = profile_data.units.value  # This will give 'imperial' or 'metric'
+    gender_enum = profile_data.gender.value  # This will give 'male', 'female', or 'not_applicable'
 
-    # Convert gender to the string representation
-    gender_value = profile_data.gender.value
-
-    # Convert height from feet and inches to centimeters
+    # Convert height from feet and inches to centimeters if provided
     height_cm = profile_data.height_feet * 30.48 + profile_data.height_inches * 2.54 if profile_data.height_feet else None
 
     # Convert weight entries to a list of dictionaries
@@ -148,15 +146,15 @@ async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
         for entry in profile_data.weight
     ]
 
-    # Create a new profile with the correct enum values
+    # Create the profile instance using strings for gender and units
     new_profile = Profile(
         user_id=user_id,
         name=profile_data.name,
-        gender=gender_value,  # Pass the string value of gender
+        gender=gender_enum,  # Pass the string value of gender ('male', 'female', 'not_applicable')
         height=height_cm,
-        weight=weight_data,  # Pass the serialized weight data
+        weight=weight_data,  # Serialized weight data
         country=profile_data.country,
-        units=units_enum  # Ensure units is passed as the correct enum value
+        units=units_enum  # Store as string ('imperial' or 'metric')
     )
 
     db.add(new_profile)
@@ -167,8 +165,9 @@ async def create_profile(db: Session, profile_data: ProfileBase, user_id: int):
 
 
 
-def get_profiles(db: Session):
-    return db.query(Profile).all()
+async def get_profiles_for_user(db: AsyncSession, user_id: int):
+    result = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+    return result.scalars().all()
 
 
 def get_profile_by_id(db: Session, profile_id: int):

@@ -7,7 +7,7 @@ class Gender(Enum):
     FEMALE = "female"
     NOT_APPLICABLE = "not applicable"
 
-class MeasurementSystem(Enum):
+class MeasurementSystem(str, Enum):
     METRIC = "metric"
     IMPERIAL = "imperial"
 
@@ -24,18 +24,6 @@ class ProfileBase(BaseModel):
     weight: List[WeightEntry]  # Historical weight entries
     country: str  # Determines units
     units: MeasurementSystem
-
-    @root_validator(pre=True)
-    def validate_and_transform(cls, values):
-        # Ensure gender is passed as a string (e.g., 'male', 'female', 'not_applicable')
-        if isinstance(values.get("gender"), str):
-            values["gender"] = Gender[values["gender"].upper()]
-        
-        # Ensure units are passed as a string (e.g., 'imperial', 'metric')
-        if isinstance(values.get("units"), str):
-            values["units"] = MeasurementSystem[values["units"].upper()]
-        
-        return values
 
 class ProfileCreate(ProfileBase):
     pass  # Extend the base ProfileBase

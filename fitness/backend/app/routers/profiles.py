@@ -30,7 +30,7 @@ async def read_profiles(
     user: User = Depends(current_active_user),
 ):
     return await crud.get_profiles_for_user(db, user_id=user.id)
-
+    
 @router.get("/profiles/{profile_id}/", response_model=Profile)
 async def read_profile(
     profile_id: int,
