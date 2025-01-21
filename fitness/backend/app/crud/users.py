@@ -24,8 +24,10 @@ async def create_user(db: AsyncSession, username: str, email: str, password: str
 
 async def authenticate_user(db: AsyncSession, username: str, password: str):
     user = await get_user_by_username(db, username)
-    if not user or not verify_password(password, user.hashed_password):
-        return None
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    if not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect password")
     return user
 
 async def get_user_by_id(db: AsyncSession, user_id: int):

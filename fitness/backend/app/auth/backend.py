@@ -25,11 +25,15 @@ class CustomUserManager(BaseUserManager[User, int]):
         print(f"User {user.username} has registered.")
 
     async def authenticate(self, credentials):
+        # Retrieve the user by username or email
         user = await self.user_db.get_by_username(credentials.username)
-        if user is None:
-            return None
+        if not user:
+            raise exceptions.UserNotExists()
+
+        # Check if the password is valid
         if not verify_password(credentials.password, user.hashed_password):
-            return None
+            raise exceptions.InvalidPasswordException()
+
         return user
 
     def parse_id(self, user_id: str) -> int:

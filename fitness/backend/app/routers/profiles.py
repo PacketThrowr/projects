@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
 from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry, ProfileResponse, WeightEntryResponse
 from app import crud
-from app.auth import current_active_user
+from app.auth.backend import current_active_user
 from app.models.user import User
 
 router = APIRouter()

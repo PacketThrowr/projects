@@ -4,7 +4,7 @@ from app.database import async_session_maker
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app import crud
 from app.utils.security import hash_password
-from app.auth import current_active_user, is_superuser
+from app.auth.backend import current_active_user, is_superuser
 from app.utils import hash_password
 from app.models.user import User
 
