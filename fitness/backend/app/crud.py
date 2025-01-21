@@ -12,6 +12,7 @@ from datetime import date
 from app.models.user import User
 from app.schemas.user import UserCreate
 from sqlalchemy.future import select
+from datetime import datetime
 
 # Get all exercises
 def get_exercises(db: Session, skip: int = 0, limit: int = 10):
@@ -255,13 +256,7 @@ def calculate_bmi(weight: float, height_cm: float) -> float:
     return round(weight / (height_m ** 2), 2)  # Round to 2 decimal places
 
 
-def add_weight_to_profile(db: Session, profile_id: int, weight: WeightEntry):
-    from datetime import datetime
-
-    # Retrieve the profile
-    db_profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not db_profile:
-        raise ValueError(f"Profile with ID {profile_id} does not exist")
+async def add_weight_to_profile(db: AsyncSession, db_profile: Profile, weight: WeightEntry):
 
     # Validate the weight date format
     try:
@@ -270,27 +265,32 @@ def add_weight_to_profile(db: Session, profile_id: int, weight: WeightEntry):
         raise ValueError("Invalid date format. Expected format: YYYY-MM-DD")
 
     # Check if the weight for this date already exists
-    if any(entry["date"] == weight.date for entry in db_profile.weight):
+    existing_weights = db_profile.weight or []  # Ensure weights are treated as a list
+    if any(entry["date"] == weight.date for entry in existing_weights):
         raise ValueError(f"Weight entry for date {weight.date} already exists")
 
     # Convert weight to kilograms if in imperial units
     weight_kg = weight.value
-    if db_profile.units == MeasurementSystem.IMPERIAL:
+    if db_profile.units == "imperial":
         weight_kg = round(weight_kg * 0.453592, 2)  # Convert lbs to kg
 
     # Calculate BMI
-    bmi = calculate_bmi(weight_kg, db_profile.height)
+    height_m = db_profile.height_cm / 100  # Convert height from cm to meters
+    bmi = round(weight_kg / (height_m ** 2), 2)
 
-    # Add the new weight entry with BMI
+    # Add the new weight entry
     new_weight_entry = {
         "date": weight.date,
-        "value": weight.value,
+        "value": weight_kg,  # Store the weight in kilograms
         "bmi": bmi,
     }
-    db_profile.weight.append(new_weight_entry)
+    db_profile.weight = existing_weights + [new_weight_entry]  # Append to the weight list
 
-    db.commit()
-    db.refresh(db_profile)
+    # Commit and refresh
+    db.add(db_profile)
+    await db.commit()
+    await db.refresh(db_profile)
+
     return db_profile
 
 def add_progress_picture(db: Session, profile_id: int, date: date, weight: float, image_path: str):

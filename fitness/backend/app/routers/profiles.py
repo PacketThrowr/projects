@@ -94,18 +94,21 @@ async def delete_weight(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/profiles/{profile_id}/weights/", response_model=Profile)
+@router.post("/profiles/{profile_id}/weights/", response_model=ProfileResponse)
 async def add_weight(
     profile_id: int,
     weight: WeightEntry,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
+    # Fetch the profile
     db_profile = await crud.get_profile_by_id(db, profile_id)
     if not db_profile or db_profile.user_id != user.id:
         raise HTTPException(status_code=404, detail="Profile not found")
+
     try:
-        updated_profile = await crud.add_weight_to_profile(db, profile_id, weight)
-        return updated_profile
+        # Add the weight entry
+        updated_profile = await crud.add_weight_to_profile(db, db_profile, weight)
+        return ProfileResponse.from_orm(updated_profile)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
