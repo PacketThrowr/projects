@@ -63,3 +63,9 @@ class ExerciseCreate(ExerciseBase):
 class Exercise(ExerciseBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
+class ExerciseSchema(BaseModel):
+    id: int
+    name: str
+    type: ExerciseType
+    model_config = ConfigDict(from_attributes=True)

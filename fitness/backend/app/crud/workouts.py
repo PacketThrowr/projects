@@ -3,13 +3,14 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 from app.schemas.workout import WorkoutCreate
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from app.schemas.profile import Profile, ProfileCreate, ProfileUpdate, WeightEntry, ProfileResponse, WeightEntryResponse
 from app.models.exercise import Exercise
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.models.profile import Profile  # Ensure this is the SQLAlchemy model
 from typing import Optional
+from sqlalchemy import delete, exists
 
 async def create_workout(db: AsyncSession, workout: WorkoutCreate):
     # Validate profile existence
@@ -78,17 +79,17 @@ async def get_workouts(db: AsyncSession):
     return result.scalars().all()
 
 
-async def update_workout_set(db: AsyncSession, profile_id: int, workout_id: int, set_id: int, updates: dict):
-    # Get the set and related exercise info in one query
+async def update_workout_set(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int, set_id: int, updates: dict):
     stmt = (
         select(WorkoutSet, Exercise.type.label('exercise_type'))
-        .select_from(WorkoutSet)  # Explicitly define the starting point
+        .select_from(WorkoutSet)
         .join(WorkoutExercise, WorkoutSet.exercise_id == WorkoutExercise.id)
         .join(Workout, WorkoutExercise.workout_id == Workout.id)
         .join(Exercise, WorkoutExercise.exercise_id == Exercise.id)
         .where(
             Workout.profile_id == profile_id,
             Workout.id == workout_id,
+            WorkoutExercise.id == exercise_id,
             WorkoutSet.id == set_id
         )
     )
@@ -252,3 +253,66 @@ async def update_workout(
     
     # Return the full workout with its relationships loaded
     return await get_workout(db, workout_id)
+
+async def delete_workout_exercise(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int):
+    stmt = (
+        delete(WorkoutExercise)
+        .where(
+            WorkoutExercise.id == exercise_id,
+            WorkoutExercise.workout_id == workout_id,
+            exists().where(
+                Workout.id == workout_id,
+                Workout.profile_id == profile_id
+            )
+        )
+        .returning(WorkoutExercise.id)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.scalar_one_or_none()
+
+async def get_exercise_sets(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int):
+    stmt = (
+        select(WorkoutSet)
+        .join(WorkoutExercise)
+        .join(Workout)
+        .where(
+            Workout.profile_id == profile_id,
+            Workout.id == workout_id,
+            WorkoutExercise.id == exercise_id
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+async def delete_exercise_set(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int, set_id: int):
+    stmt = (
+        delete(WorkoutSet)
+        .where(
+            WorkoutSet.id == set_id,
+            WorkoutSet.exercise_id == exercise_id,
+            exists().where(
+                WorkoutExercise.id == exercise_id,
+                WorkoutExercise.workout_id == workout_id,
+                Workout.id == workout_id,
+                Workout.profile_id == profile_id
+            )
+        )
+        .returning(WorkoutSet.id)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.scalar_one_or_none()
+
+async def get_workout_exercises(db: AsyncSession, profile_id: int, workout_id: int):
+    stmt = (
+        select(WorkoutExercise)
+        .join(Workout)
+        .options(selectinload(WorkoutExercise.sets))
+        .where(
+            Workout.profile_id == profile_id,
+            Workout.id == workout_id
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()

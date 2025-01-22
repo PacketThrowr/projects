@@ -4,17 +4,16 @@
       <div class="login-header">
         <h1>Welcome Back!</h1>
         <p>Please log in to access your account</p>
-        <!<img src="your-image-url-here.jpg" alt="Login Illustration" class="login-image" />>
       </div>
       <form @submit.prevent="handleLogin">
         <div class="input-group">
-          <label for="email">Email</label>
+          <label for="username">Username</label>
           <input
-            type="email"
-            id="email"
-            v-model="email"
+            type="text"
+            id="username"
+            v-model="username"
             required
-            placeholder="Enter your email"
+            placeholder="Enter your username"
           />
         </div>
         <div class="input-group">
@@ -43,10 +42,12 @@
 </template>
 
 <script>
+import { API_BASE_URL } from "../config"; // Import the global API base URL
+
 export default {
   data() {
     return {
-      email: "",
+      username: "", // Replaced email with username
       password: "",
       loading: false,
       error: null,
@@ -58,10 +59,10 @@ export default {
       this.error = null;
 
       try {
-        const response = await fetch("http://10.1.10.168:8000/api/login", {
+        const response = await fetch(`${API_BASE_URL}/api/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: this.email, password: this.password }),
+          body: JSON.stringify({ username: this.username, password: this.password }),
         });
 
         if (!response.ok) {

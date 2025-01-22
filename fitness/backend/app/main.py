@@ -6,6 +6,7 @@ from app.routers.profiles import router as profiles_router
 from app.routers.progress_pictures import router as progress_pictures_router
 from app.routers.users import router as users_router
 from app.routers.auth import router as auth_router
+from app.routers.cardio import router as cardio_router
 from app.database import engine
 from app.models import Base  # Import Base to include all models
 import asyncio
@@ -32,6 +33,7 @@ app.include_router(workouts_router, prefix="/api", tags=["workouts"])
 app.include_router(profiles_router, prefix="/api", tags=["profiles"])
 app.include_router(progress_pictures_router, prefix="/api", tags=["progress_pictures"])
 app.include_router(users_router, prefix="/api", tags=["users"])
+app.include_router(cardio_router, prefix="/api", tags=["cardio"])
 app.include_router(auth_router)
 
 @app.get("/")

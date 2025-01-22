@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
+from app.schemas.exercise import ExerciseSchema
 from app.schemas.workout import (
     Workout as WorkoutSchema, 
     WorkoutCreate, 
@@ -9,7 +10,8 @@ from app.schemas.workout import (
     SetUpdate,
     WeightSetUpdate,
     CardioSetUpdate,
-    ExerciseAdd
+    ExerciseAdd,
+    WorkoutExerciseSchema
 )
 from app.crud.workouts import (
     create_workout,
@@ -102,37 +104,19 @@ async def delete_workout_route(
         raise HTTPException(status_code=404, detail="Workout not found")
     return {"message": f"Workout with ID {workout_id} has been deleted"}
 
-
-@router.put("/profiles/{profile_id}/workouts/{workout_id}/sets/{set_id}/", response_model=WorkoutSetSchema)
-async def update_workout_set_route(
+@router.get("/profiles/{profile_id}/workouts/{workout_id}/exercises/", response_model=list[WorkoutExerciseSchema])
+async def get_workout_exercises_route(
     profile_id: int,
-    workout_id: int,  # Added workout_id parameter
-    set_id: int,
-    set_data: WeightSetUpdate | CardioSetUpdate,
+    workout_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
-    logger.info(f"Updating set {set_id} for profile {profile_id} in workout {workout_id}")
-
-    # Verify the profile belongs to the user
     db_profile = await crud.get_profile_by_id(db, profile_id)
     if not db_profile or db_profile.user_id != user.id:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    try:
-        # Update the workout set
-        db_set = await update_workout_set(
-            db, 
-            profile_id,
-            workout_id,  # Pass workout_id to crud function
-            set_id, 
-            set_data.model_dump(exclude_unset=True)
-        )
-        if not db_set:
-            raise HTTPException(status_code=404, detail="Set not found")
-        return db_set
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    exercises = await crud.get_workout_exercises(db, profile_id, workout_id)
+    return exercises
 
 @router.post("/profiles/{profile_id}/workouts/{workout_id}/exercises/", response_model=dict)
 async def add_exercise_route(
@@ -159,6 +143,38 @@ async def add_exercise_route(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.delete("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}")
+async def delete_workout_exercise_route(
+    profile_id: int,
+    workout_id: int,
+    exercise_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    deleted = await crud.delete_workout_exercise(db, profile_id, workout_id, exercise_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+    return {"message": "Exercise deleted"}
+
+@router.get("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}/sets", response_model=list[WorkoutSetSchema])
+async def get_exercise_sets_route(
+    profile_id: int,
+    workout_id: int,
+    exercise_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    sets = await crud.get_exercise_sets(db, profile_id, workout_id, exercise_id)
+    return sets
+
 @router.post("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}/sets", response_model=WorkoutSetSchema)
 async def add_set_to_exercise_route(
     profile_id: int,
@@ -184,3 +200,52 @@ async def add_set_to_exercise_route(
         return new_set
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}/sets/{set_id}/", response_model=WorkoutSetSchema)
+async def update_workout_set_route(
+    profile_id: int,
+    workout_id: int,
+    exercise_id: int,  # Added exercise_id parameter
+    set_id: int,
+    set_data: WeightSetUpdate | CardioSetUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    logger.info(f"Updating set {set_id} for profile {profile_id} in workout {workout_id}")
+
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    try:
+        db_set = await update_workout_set(
+            db, 
+            profile_id,
+            workout_id,
+            exercise_id,  # Added exercise_id
+            set_id, 
+            set_data.model_dump(exclude_unset=True)
+        )
+        if not db_set:
+            raise HTTPException(status_code=404, detail="Set not found")
+        return db_set
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}/sets/{set_id}")
+async def delete_exercise_set_route(
+    profile_id: int,
+    workout_id: int,
+    exercise_id: int,
+    set_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    deleted = await crud.delete_exercise_set(db, profile_id, workout_id, exercise_id, set_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Set not found")
+    return {"message": "Set deleted"}

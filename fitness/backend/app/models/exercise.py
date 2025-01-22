@@ -4,6 +4,7 @@ from app.database import Base
 from enum import Enum as PyEnum
 from sqlalchemy import JSON
 from sqlalchemy.orm import relationship
+from .cardio import CardioSession
 
 # Define enumerations for type and weight type
 class ExerciseType(PyEnum):
@@ -42,3 +43,4 @@ class Exercise(Base):
     measurement_type = Column(String, nullable=False)
 
     workout_exercises = relationship("WorkoutExercise", back_populates="exercise")
+    cardio_sessions = relationship("CardioSession", back_populates="exercise", cascade="all, delete-orphan")

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, ConfigDict
 from typing import List, Optional
 from enum import Enum
 
@@ -90,3 +90,10 @@ class CardioSetUpdate(SetBaseUpdate):
 class SetUpdate(BaseModel):
     type: SetType
     data: WeightSetUpdate | CardioSetUpdate
+
+class WorkoutExerciseSchema(BaseModel):
+    id: int
+    exercise_id: int
+    workout_id: int
+    sets: List[WorkoutSet] = []
+    model_config = ConfigDict(from_attributes=True)

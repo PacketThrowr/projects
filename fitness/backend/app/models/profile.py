@@ -2,6 +2,7 @@ from sqlalchemy import Enum, Column, Integer, String, Float, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 from enum import Enum
+from app.models.cardio import CardioSession
 
 class Gender(Enum):
     MALE = "male"
@@ -27,3 +28,4 @@ class Profile(Base):
 
     user = relationship("User", back_populates="profile")
     workouts = relationship("Workout", back_populates="profile", cascade="all, delete")
+    cardio_sessions = relationship("CardioSession", back_populates="profile", cascade="all, delete-orphan")
