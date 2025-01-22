@@ -1,0 +1,26 @@
+/* src/assets/styles.css */
+
+/* Light Theme */
+:root {
+    --background-color: #ffffff;
+    --text-color: #000000;
+    --menu-bar-color: #4caf50;
+    --menu-bar-text-color: #ffffff;
+  }
+  
+  /* Dark Theme */
+  :root.dark {
+    --background-color: #121212;
+    --text-color: #ffffff;
+    --menu-bar-color: #333333;
+    --menu-bar-text-color: #ffffff;
+  }
+  
+  /* Apply variables globally */
+  body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  
