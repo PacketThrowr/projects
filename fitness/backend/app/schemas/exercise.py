@@ -1,23 +1,28 @@
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator, root_validator, ConfigDict
 from typing import Optional, List
 from enum import Enum
 
 
 # Define enumerations
 class ExerciseType(str, Enum):
-    cardio = "cardio"
-    weights = "weights"
-
+    CARDIO = "CARDIO"
+    WEIGHTS = "WEIGHTS"
 
 class WeightType(str, Enum):
-    free_weights = "free_weights"
-    machines = "machines"
-    bodyweight = "bodyweight"
-
+    BARBELL = "BARBELL"
+    DUMBBELL = "DUMBBELL"
+    KETTLEBELL = "KETTLEBELL"
+    CABLE = "CABLE"
+    MACHINE = "MACHINE"
+    BODYWEIGHT = "BODYWEIGHT"
+    RESISTANCE_BAND = "RESISTANCE_BAND"
+    SMITH_MACHINE = "SMITH_MACHINE"
+    PLATE_LOADED = "PLATE_LOADED"
+    OTHER = "OTHER"
 
 class MeasurementType(str, Enum):
-    reps = "reps"
-    time = "time"
+    REPS = "REPS"
+    TIME = "TIME"
 
 
 # Base schema
@@ -29,19 +34,26 @@ class ExerciseBase(BaseModel):
     weight_type: Optional[WeightType] = None
     muscle_category: Optional[str] = None
     muscle_groups: Optional[List[str]] = None
-    measurement_type: MeasurementType = MeasurementType.reps  # Default to 'reps'
+    measurement_type: MeasurementType
 
-    # Model validator for conditional fields
-    @model_validator(mode="after")
-    def validate_weight_fields(cls, values):
-        if values.type == ExerciseType.weights:
-            if not values.weight_type:
-                raise ValueError("weight_type is required when type is 'weights'")
-            if not values.muscle_category:
-                raise ValueError("muscle_category is required when type is 'weights'")
-            if not values.muscle_groups or not isinstance(values.muscle_groups, list):
-                raise ValueError("muscle_groups must be a list when type is 'weights'")
-        return values
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_enum_values(cls, data):
+        """
+        Ensure enum fields are normalized correctly.
+        """
+        if not isinstance(data, dict):
+            return data
+            
+        if isinstance(data.get("weight_type"), str):
+            data["weight_type"] = data["weight_type"].upper()
+        if isinstance(data.get("type"), str):
+            data["type"] = data["type"].upper()
+        if isinstance(data.get("measurement_type"), str):
+            data["measurement_type"] = data["measurement_type"].upper()
+        return data
+
+
 
 
 class ExerciseCreate(ExerciseBase):
@@ -49,5 +61,5 @@ class ExerciseCreate(ExerciseBase):
 
 
 class Exercise(ExerciseBase):
-    class Config:
-        from_attributes = True
+    id: int
+    model_config = ConfigDict(from_attributes=True)

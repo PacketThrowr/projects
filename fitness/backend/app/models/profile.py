@@ -26,3 +26,4 @@ class Profile(Base):
     progress_pictures = relationship("ProgressPicture", back_populates="profile", cascade="all, delete")
 
     user = relationship("User", back_populates="profile")
+    workouts = relationship("Workout", back_populates="profile", cascade="all, delete")

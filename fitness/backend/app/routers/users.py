@@ -29,7 +29,7 @@ async def get_users(
 @router.post("/users/", response_model=UserResponse)
 async def create_new_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check if the username already exists
-    db_user = await get_user_by_username(db, username=user.username)
+    db_user = await crud.get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
@@ -37,7 +37,7 @@ async def create_new_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     hashed_password = hash_password(user.password)
 
     # Create the new user
-    return await create_user(db, username=user.username, email=user.email, password=hashed_password)
+    return await crud.create_user(db, username=user.username, email=user.email, password=hashed_password)
 
 @router.put("/users/{user_id}/", response_model=UserResponse)
 async def update_user_api(
