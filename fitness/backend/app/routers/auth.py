@@ -10,6 +10,14 @@ import logging
 logger = logging.getLogger("uvicorn.error")  # Use Uvicorn's logger
 router = APIRouter()
 
+@router.get("/auth/me")
+async def get_current_user(user: User = Depends(fastapi_users.current_user())):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_superuser": user.is_superuser
+    }
+    
 @router.post("/auth/jwt/login")
 async def custom_login_route(
     username: str = Form(...),

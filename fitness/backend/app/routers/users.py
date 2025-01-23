@@ -37,7 +37,15 @@ async def create_new_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     hashed_password = hash_password(user.password)
 
     # Create the new user
-    return await crud.create_user(db, username=user.username, email=user.email, password=hashed_password)
+    return await crud.create_user(
+        db,
+        username=user.username,
+        email=user.email,
+        password=hashed_password,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        is_verified=user.is_verified,
+    )
 
 @router.put("/users/{user_id}/", response_model=UserResponse)
 async def update_user_api(
@@ -54,11 +62,7 @@ async def update_user_api(
     if db_user.id != current_user.id and not is_superuser(current_user):
         raise HTTPException(status_code=403, detail="Not authorized to update this user")
 
-    # Hash the password if it's being updated
-    if user_update.password:
-        user_update.password = hash_password(user_update.password)
-
-    # Update the user
+    # Update the user, including hashing the password if provided
     updated_user = await crud.update_user(db, user_id, user_update)
     return updated_user
 

@@ -44,3 +44,4 @@ class Exercise(Base):
 
     workout_exercises = relationship("WorkoutExercise", back_populates="exercise")
     cardio_sessions = relationship("CardioSession", back_populates="exercise", cascade="all, delete-orphan")
+    workout_plan_exercises = relationship("WorkoutPlanExercise", back_populates="exercise")

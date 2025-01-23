@@ -43,6 +43,7 @@ class WorkoutExercise(WorkoutExerciseBase):
 class WorkoutBase(BaseModel):
     name: str
     description: Optional[str] = None
+    date: str
 
 class WorkoutCreate(WorkoutBase):
     profile_id: int

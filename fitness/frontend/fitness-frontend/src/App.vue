@@ -18,11 +18,13 @@ export default {
   },
   setup() {
     const route = useRoute();
-    // Compute whether to show the menu bar
     const showMenuBar = computed(() => {
-      console.log(route.name); // Debug: Log the current route name
-      return route.name !== "Login"; // Hide menu bar on the login page
+      return !["Login", "SignUp"].includes(route.name);
     });
+
+    return {
+      showMenuBar,
+    };
 
     return {
       showMenuBar,

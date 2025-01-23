@@ -7,3 +7,4 @@ from .progress_pictures import *
 from .workouts import *
 from .exercises import *
 from .cardio import *
+from .workout_plans import *

@@ -12,7 +12,8 @@ class Workout(Base):
     description = Column(String, nullable=True)
     profile_id = Column(Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     exercises = relationship("WorkoutExercise", back_populates="workout", cascade="all, delete-orphan")
-
+    date = Column(String, nullable=False)
+    
     profile = relationship("Profile", back_populates="workouts")
 
 class WorkoutExercise(Base):

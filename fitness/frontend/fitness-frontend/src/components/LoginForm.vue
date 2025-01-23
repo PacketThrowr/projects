@@ -59,10 +59,13 @@ export default {
       this.error = null;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/login`, {
+        const response = await fetch(`${API_BASE_URL}/auth/jwt/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: this.username, password: this.password }),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            username: this.username,
+            password: this.password,
+          }),
         });
 
         if (!response.ok) {
@@ -70,7 +73,7 @@ export default {
         }
 
         const data = await response.json();
-        localStorage.setItem("token", data.token); // Store the token for future requests
+        localStorage.setItem("token", data.access_token);
         this.$router.push("/dashboard"); // Redirect to a dashboard or another page
       } catch (err) {
         this.error = err.message;

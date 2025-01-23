@@ -29,3 +29,8 @@ class Profile(Base):
     user = relationship("User", back_populates="profile")
     workouts = relationship("Workout", back_populates="profile", cascade="all, delete")
     cardio_sessions = relationship("CardioSession", back_populates="profile", cascade="all, delete-orphan")
+    workout_plans = relationship(
+        "WorkoutPlan",
+        back_populates="profile",
+        cascade="all, delete-orphan"  # Optional, ensures cascade delete
+    )
