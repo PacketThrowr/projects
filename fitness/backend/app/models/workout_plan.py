@@ -10,8 +10,6 @@ class WorkoutPlan(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     profile_id = Column(Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    exercises = relationship("WorkoutPlanExercise", back_populates="workout_plan", cascade="all, delete-orphan")
-
     profile = relationship("Profile", back_populates="workout_plans")
     exercises = relationship(
         "WorkoutPlanExercise", 
@@ -26,7 +24,7 @@ class WorkoutPlanExercise(Base):
     workout_plan_id = Column(Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"))
     exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="CASCADE"))
     workout_plan = relationship("WorkoutPlan", back_populates="exercises")
-    exercise = relationship("Exercise", back_populates="workout_plan_exercises")
+    exercise = relationship("Exercise", back_populates="workout_plan_exercises", lazy="joined")
     sets = relationship("WorkoutPlanSet", back_populates="exercise", cascade="all, delete-orphan",lazy="selectin")
 
 

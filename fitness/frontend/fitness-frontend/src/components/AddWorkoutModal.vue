@@ -2,7 +2,7 @@
   <div v-if="showModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>{{ isExerciseSelection ? 'Select Exercises' : 'Add Workout' }}</h2>
+        <h2>{{ editMode ? 'Edit Workout' : 'Add Workout' }}</h2>
         <button @click="closeModal" class="close-button">&times;</button>
       </div>
 
@@ -31,9 +31,34 @@
           <div class="form-group">
             <label>Selected Exercises</label>
             <div class="selected-exercises">
-              <div v-for="exercise in selectedExercises" :key="exercise.id" class="selected-exercise">
-                {{ exercise.name }}
-                <button @click.prevent="removeExercise(exercise)" class="remove-button">&times;</button>
+              <div v-for="exercise in selectedExercises" :key="exercise.id" class="exercise-block">
+                {{ console.log('Rendering exercise:', exercise) }}
+                <div class="exercise-header">
+                  <h4>{{ exercise.exercise.name }}</h4>
+                  <button type="button" @click="addSet(exercise)" class="secondary-button">Add Set</button>
+                </div>
+                
+                <div class="sets-table">
+                  <div class="set-header" :class="{'time-layout': exercise.exercise.measurement_type === 'TIME'}">
+                    <span>#</span>
+                    <span v-if="exercise.exercise.measurement_type === 'REPS'">Reps</span>
+                    <span v-if="exercise.exercise.measurement_type === 'REPS'">Weight</span>
+                    <span v-if="exercise.exercise.measurement_type === 'TIME'">Time (mm:ss)</span>
+                    <span>Complete</span>
+                  </div>
+
+                  <div v-for="(set, index) in exercise.sets" :key="index" class="set-row" :class="{'time-layout': exercise.exercise.measurement_type === 'TIME'}">
+                    <span>{{ index + 1 }}</span>
+                    <template v-if="exercise.exercise.measurement_type === 'REPS'">
+                      <input type="number" v-model="set.reps" min="0">
+                      <input type="number" v-model="set.weight" min="0">
+                    </template>
+                    <template v-if="exercise.exercise.measurement_type === 'TIME'">
+                      <div class="time-input">...</div>
+                    </template>
+                    <input type="checkbox" v-model="set.completed">
+                  </div>
+                </div>
               </div>
             </div>
             <button type="button" @click="showExerciseSelection" class="secondary-button">
@@ -43,7 +68,9 @@
 
           <div class="modal-actions">
             <button type="button" @click="closeModal" class="cancel-button">Cancel</button>
-            <button type="submit" class="submit-button">Create Workout</button>
+            <button type="submit" class="submit-button">
+              {{ editMode ? 'Update' : 'Create' }} Workout
+            </button>
           </div>
         </form>
         </div>
@@ -119,6 +146,7 @@
 import { ref, computed } from 'vue';
 import { API_BASE_URL } from '../config';
 
+const editMode = ref(false);
 const showModal = ref(false);
 const isExerciseSelection = ref(false);
 const exercises = ref([]);
@@ -136,6 +164,26 @@ const formData = ref({
   exercises: []
 });
 
+const addSet = (exercise, e) => {
+  e?.preventDefault();  // Add this line to prevent any default behavior
+  if (!exercise.sets) exercise.sets = [];
+  
+  const newSet = {
+    reps: 0,
+    weight: 0,
+    time: 0,
+    completed: false,
+    minutes: 0,
+    seconds: 0
+  };
+  
+  exercise.sets.push(newSet);
+};
+
+const updateSeconds = (set) => {
+  set.time = (parseInt(set.minutes) * 60) + parseInt(set.seconds);
+};
+
 // Fetch exercises
 const fetchExercises = async () => {
   try {
@@ -146,7 +194,9 @@ const fetchExercises = async () => {
       }
     });
     if (!response.ok) throw new Error('Failed to fetch exercises');
-    exercises.value = await response.json();
+    const data = await response.json();
+    console.log('Fetched exercises:', data); // Add this line to inspect the data
+    exercises.value = data;
   } catch (error) {
     console.error('Error fetching exercises:', error);
   }
@@ -175,10 +225,23 @@ const isExerciseSelected = (exercise) => {
 };
 
 const toggleExercise = (exercise) => {
+  console.log('Original exercise:', exercise);  // Add this line
   if (isExerciseSelected(exercise)) {
     selectedExercises.value = selectedExercises.value.filter(e => e.id !== exercise.id);
   } else {
-    selectedExercises.value.push(exercise);
+    const newExercise = {
+      ...exercise,
+      exercise: {
+        id: exercise.id,
+        name: exercise.name,
+        measurement_type: exercise.measurement_type,
+        weight_type: exercise.weight_type,
+      },
+      exercise_id: exercise.id,
+      sets: []
+    };
+    console.log('New exercise:', newExercise);  // Add this line
+    selectedExercises.value.push(newExercise);
   }
 };
 
@@ -204,24 +267,32 @@ const confirmExerciseSelection = () => {
 const handleSubmit = async () => {
   try {
     const profileId = localStorage.getItem('selectedProfileId');
-    if (!profileId) {
-      throw new Error('No profile selected');
-    }
+    const token = localStorage.getItem('token');
 
     const workoutData = {
-      ...formData.value,
+      name: formData.value.name,
+      description: formData.value.description,
       profile_id: parseInt(profileId),
       exercises: selectedExercises.value.map(exercise => ({
-        id: exercise.id,
         exercise_id: exercise.id,
-        workout_id: 0,
-        sets: []
+        sets: exercise.sets.map(set => ({
+          reps: set.reps || 0,  // Default to 0 instead of null
+          weight: set.weight || 0, 
+          time: exercise.weight_type === 'TIME' ? (set.time || 0) : null,
+          completed: set.completed || false
+        }))
       }))
     };
 
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans`, {
-      method: 'POST',
+    // Use PUT for edit, POST for create
+    const method = editMode.value ? 'PUT' : 'POST';
+    const workoutId = editMode.value ? formData.value.id : '';
+    const url = editMode.value 
+      ? `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}`
+      : `${API_BASE_URL}/api/profiles/${profileId}/workout_plans`;
+
+    const workoutResponse = await fetch(url, {
+      method,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -229,11 +300,78 @@ const handleSubmit = async () => {
       body: JSON.stringify(workoutData)
     });
 
-    if (!response.ok) throw new Error('Failed to create workout');
-    
+    if (!workoutResponse.ok) {
+      const error = await workoutResponse.json();
+      console.error('Workout operation error:', error);
+      throw new Error(`Failed to ${editMode.value ? 'update' : 'create'} workout`);
+    }
+
+    const workout = await workoutResponse.json();
+
+    if (editMode.value) {
+      // Delete existing exercises
+      const existingExercises = await fetch(
+        `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}/exercises`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const exercises = await existingExercises.json();
+      
+      for (const exercise of exercises) {
+        await fetch(
+          `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}/exercises/${exercise.id}`,
+          {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        );
+      }
+    }
+
+    // Add exercises 
+    for (const exercise of selectedExercises.value) {
+      await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ exercise_id: exercise.id })
+      });
+    }
+
+    // Get exercises with IDs
+    const exercisesResponse = await fetch(
+      `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const exercises = await exercisesResponse.json();
+
+    // Add sets using returned exercise IDs
+    for (const [index, exercise] of exercises.entries()) {
+      const sets = selectedExercises.value[index].sets || [];
+      for (const set of sets) {
+        await fetch(
+          `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises/${exercise.id}/sets`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              completed: set.completed,
+              weight: set.weight || 0,
+              reps: set.reps || 0,
+              time: set.time || 0
+            })
+          }
+        );
+      }
+    }
+
     closeModal();
   } catch (error) {
-    console.error('Error creating workout:', error);
+    console.error('Error:', error);
   }
 };
 
@@ -249,11 +387,18 @@ const closeModal = () => {
   selectedExercises.value = [];
 };
 
-// Expose methods needed by parent
-defineExpose({
-  showModal,
-  closeModal
-});
+const initializeEditForm = (plan) => {
+  editMode.value = true;
+  formData.value = {
+    id: plan.id,  // Important to add this
+    name: plan.name,
+    description: plan.description,
+    profile_id: plan.profile_id,
+  };
+  selectedExercises.value = plan.exercises || [];
+};
+
+defineExpose({ showModal, closeModal, editMode, initializeEditForm });
 </script>
 
 <style scoped>
@@ -444,5 +589,66 @@ input, textarea, select {
 .search-input:focus {
   outline: none;
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.exercise-block {
+  width: 100%;
+  margin-bottom: 1rem;
+  background: var(--background-color);
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.exercise-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.sets-table {
+  width: 100%;
+}
+
+.set-header, .set-row {
+  display: grid;
+  grid-template-columns: 40px repeat(2, 1fr) 80px;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.time-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.time-input input {
+  width: 60px;
+}
+
+.set-row {
+  display: grid;
+  grid-template-columns: 40px repeat(2, 1fr) 80px;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.set-row.time-layout {
+  grid-template-columns: 40px 1fr 80px;
+}
+
+.set-header {
+  display: grid;
+  grid-template-columns: 40px repeat(2, 1fr) 80px;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.set-header.time-layout {
+  grid-template-columns: 40px 1fr 80px;
 }
 </style>

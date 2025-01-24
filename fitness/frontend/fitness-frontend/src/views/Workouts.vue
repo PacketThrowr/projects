@@ -6,6 +6,46 @@
       <button @click="openAddWorkoutModal" class="add-button">Add Workout Program</button>
     </div>
 
+    <!-- Workout Plans Section -->
+    <section class="workouts-section">
+      <h2>Workout Plans</h2>
+      <div class="plans-wrapper">
+        <button 
+          class="scroll-button left" 
+          @click="scrollLeft"
+          :class="{ 'visible': canScrollLeft }"
+        >
+          &#8592;
+        </button>
+        <div class="plans-container" ref="plansContainer">
+          <div 
+            v-for="plan in workoutPlans" 
+            :key="plan.id" 
+            class="plan-tile"
+          >
+            <div class="menu-button">
+              <button @click.stop="toggleMenu(plan.id)" class="dots-button">⋮</button>
+              <div v-if="menuStates[plan.id]" class="menu">
+                <button @click="startWorkout">Start Workout</button>
+                <button @click="editWorkout(plan)">Edit</button>
+                <button @click="deleteWorkout(plan.id)">Delete</button>
+              </div>
+            </div>
+            <h3>{{ plan.name }}</h3>
+            <p>{{ plan.description }}</p>
+            <p class="exercise-count">Exercises: {{ plan.exercises.length }}</p>
+          </div>
+        </div>
+        <button 
+          class="scroll-button right" 
+          @click="scrollRight"
+          :class="{ 'visible': canScrollRight }"
+        >
+          &#8594;
+        </button>
+      </div>
+    </section>
+
     <!-- Previous Workouts Section -->
     <section class="workouts-section">
       <h2>Previous Workouts</h2>
@@ -28,21 +68,129 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import AddWorkoutModal from '../components/AddWorkoutModal.vue';
+import { API_BASE_URL } from '../config';
 
 const addWorkoutModal = ref(null);
+const workoutPlans = ref([]);
+const plansContainer = ref(null);
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+const menuStates = ref({});
+
+const editWorkout = (plan) => {
+ addWorkoutModal.value.showModal = true;
+ addWorkoutModal.value.editMode = true;
+ addWorkoutModal.value.initializeEditForm(plan);
+};
+
+const toggleMenu = (planId) => {
+  menuStates.value[planId] = !menuStates.value[planId];
+};
 
 const openAddWorkoutModal = () => {
   addWorkoutModal.value.showModal = true;
 };
+
+const fetchWorkoutPlans = async () => {
+  try {
+    const profileId = localStorage.getItem('selectedProfileId');
+    if (!profileId) {
+      throw new Error('No profile selected');
+    }
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans`,{
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    workoutPlans.value = await response.json();
+  } catch (error) {
+    console.error('Error fetching workout plans:', error);
+  }
+};
+
+const deleteWorkout = async (id) => {
+ try {
+   const profileId = localStorage.getItem('selectedProfileId');
+   const token = localStorage.getItem('token');
+   await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${id}`, {
+     method: 'DELETE',
+     headers: {
+       'Authorization': `Bearer ${token}`
+     }
+   });
+   fetchWorkoutPlans();
+ } catch (error) {
+   console.error('Error deleting workout:', error);
+ }
+};
+
+const checkScroll = () => {
+  if (plansContainer.value) {
+    const { scrollLeft, scrollWidth, clientWidth } = plansContainer.value;
+    canScrollLeft.value = scrollLeft > 0;
+    canScrollRight.value = scrollLeft < scrollWidth - clientWidth;
+  }
+};
+
+const scrollLeft = () => {
+  if (plansContainer.value) {
+    plansContainer.value.scrollBy({ left: -300, behavior: 'smooth' });
+  }
+};
+
+const scrollRight = () => {
+  if (plansContainer.value) {
+    plansContainer.value.scrollBy({ left: 300, behavior: 'smooth' });
+  }
+};
+
+onMounted(() => {
+  fetchWorkoutPlans();
+  checkScroll();
+  window.addEventListener('resize', checkScroll);
+  if (plansContainer.value) {
+    plansContainer.value.addEventListener('scroll', checkScroll);
+  };
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.menu-button')) {
+      menuStates.value = {};
+    }
+  });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkScroll);
+  if (plansContainer.value) {
+    plansContainer.value.removeEventListener('scroll', checkScroll);
+  };
+  document.removeEventListener('click');
+});
 </script>
 
 <style scoped>
+#app {
+  width: 100%;
+  min-width: fit-content;
+  overflow-x: auto;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  width: 100%; /* Ensure the page doesn't exceed the viewport width */
+  box-sizing: border-box; /* Include padding in width calculations */
+}
+
 .workouts-page {
-  padding: 2rem;
-  background-color: var(--background-color);
-  min-height: 100vh;
+  width: 100%;
+  padding: 0 2rem;
+  box-sizing: border-box;
 }
 
 .header {
@@ -73,9 +221,11 @@ h1 {
 }
 
 .workouts-section {
+  width: 100%;
   margin-bottom: 3rem;
+  position: relative;
+  background-color: var(--menu-bar-color);
 }
-
 h2 {
   color: var(--text-color);
   margin-bottom: 1rem;
@@ -83,9 +233,182 @@ h2 {
 }
 
 .workouts-container {
-  background-color: var(--menu-bar-color);
-  border-radius: 8px;
+  display: flex;
+  overflow-x: auto;
+  gap: 1rem;
   padding: 1rem;
-  min-height: 100px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* Add this if you want to hide the scrollbar but keep functionality */
+.workouts-container::-webkit-scrollbar {
+  display: none;
+}
+
+.plans-wrapper {
+  position: relative;
+  padding: 1rem;
+}
+
+.plans-container {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  width: 100%;
+  padding: 0 2rem;
+}
+
+.plans-container::-webkit-scrollbar {
+  display: none;
+}
+
+.plan-tile {
+  flex: 0 0 300px;
+  background-color: #1a1a1a;
+  padding: 2rem;
+  border-radius: 8px; /* Match the parent's border-radius */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  height: 200px;
+
+  /* Flexbox for centering content */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden; /* Prevent content overflow */
+}
+
+.plan-tile h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.plan-tile p {
+  margin: 0.5rem 0;
+}
+
+.exercise-count {
+  position: absolute;
+  bottom: 1rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 1rem; /* Optional: Adjust font size for better alignment */
+}
+
+.plan-tile h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.plan-tile p {
+  margin: 0;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.exercise-count {
+  margin-top: auto;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.scroll-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.5rem;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 1;
+}
+
+.scroll-button.visible {
+  opacity: 1;
+}
+
+.scroll-button.left {
+  left: 1rem;
+}
+
+.scroll-button.right {
+  right: 1rem;
+}
+
+.scroll-button:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+@media (max-width: 480px) {
+ .plan-tile {
+   width: calc(100% - 2rem);
+   min-width: unset;
+   flex: 0 0 auto;
+ }
+ 
+ .plans-container {
+   padding: 0 1rem;
+ }
+
+
+}
+.workouts-section h2 {
+  padding: 0 1rem;
+}
+
+.menu-button {
+ position: absolute;
+ top: 1rem;
+ right: 1rem;
+}
+
+.dots-button {
+ background: none;
+ border: none;
+ color: var(--text-color);
+ font-size: 1.5rem;
+ cursor: pointer;
+ padding: 0.25rem;
+}
+
+.menu {
+ position: absolute;
+ right: 0;
+ top: 100%;
+ background: #1a1a1a;
+ border: 1px solid rgba(255, 255, 255, 0.1);
+ border-radius: 4px;
+ padding: 0.5rem;
+ z-index: 10;
+}
+
+.menu button {
+ display: block;
+ width: 100%;
+ padding: 0.5rem 1rem;
+ text-align: left;
+ background: none;
+ border: none;
+ color: var(--text-color);
+ cursor: pointer;
+}
+
+.menu button:hover {
+ background: rgba(255, 255, 255, 0.1);
 }
 </style>
