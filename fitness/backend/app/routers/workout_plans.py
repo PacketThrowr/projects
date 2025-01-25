@@ -39,7 +39,6 @@ from app.auth.backend import current_active_user
 from app.models.user import User
 from app import crud
 from app.utils import validate_user_profile
-from app.crud.exercises import get_set_exercise_type
 import logging
 from sqlalchemy import select
 from app.crud.workout_plans import (

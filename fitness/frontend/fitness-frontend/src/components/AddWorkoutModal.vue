@@ -32,31 +32,39 @@
             <label>Selected Exercises</label>
             <div class="selected-exercises">
               <div v-for="exercise in selectedExercises" :key="exercise.id" class="exercise-block">
-                {{ console.log('Rendering exercise:', exercise) }}
                 <div class="exercise-header">
                   <h4>{{ exercise.exercise.name }}</h4>
+                    <div>
+                      <button type="button" @click="addSet(exercise)" class="secondary-button">Add Set</button>
+                      <button type="button" @click="removeExercise(exercise)" class="delete-button">Delete Exercise</button>
+                    </div>
                   <button type="button" @click="addSet(exercise)" class="secondary-button">Add Set</button>
                 </div>
                 
                 <div class="sets-table">
-                  <div class="set-header" :class="{'time-layout': exercise.exercise.measurement_type === 'TIME'}">
+                  <div class="set-header" :class="{'time-layout': exercise.exercise.recorded_type === 'TIME'}">
                     <span>#</span>
-                    <span v-if="exercise.exercise.measurement_type === 'REPS'">Reps</span>
-                    <span v-if="exercise.exercise.measurement_type === 'REPS'">Weight</span>
-                    <span v-if="exercise.exercise.measurement_type === 'TIME'">Time (mm:ss)</span>
+                    <span v-if="exercise.exercise.recorded_type === 'REPS'">Reps</span>
+                    <span v-if="exercise.exercise.recorded_type === 'REPS'">Weight</span>
+                    <span v-if="exercise.exercise.recorded_type === 'TIME'">Time (mm:ss)</span>
                     <span>Complete</span>
                   </div>
 
-                  <div v-for="(set, index) in exercise.sets" :key="index" class="set-row" :class="{'time-layout': exercise.exercise.measurement_type === 'TIME'}">
+                  <div v-for="(set, index) in exercise.sets" :key="index" class="set-row" :class="{'time-layout': exercise.exercise.recorded_type === 'TIME'}">
                     <span>{{ index + 1 }}</span>
-                    <template v-if="exercise.exercise.measurement_type === 'REPS'">
+                    <template v-if="exercise.exercise.recorded_type === 'REPS'">
                       <input type="number" v-model="set.reps" min="0">
                       <input type="number" v-model="set.weight" min="0">
                     </template>
-                    <template v-if="exercise.exercise.measurement_type === 'TIME'">
-                      <div class="time-input">...</div>
+                    <template v-if="exercise.exercise.recorded_type === 'TIME'">
+                      <div class="time-input">
+                        <input type="number" v-model="set.minutes" min="0" placeholder="mm">
+                        <input type="number" v-model="set.seconds" min="0" max="59" placeholder="ss">
+                      </div>
                     </template>
                     <input type="checkbox" v-model="set.completed">
+                    <!-- Delete button for sets -->
+                    <button @click="removeSet(exercise, index)" class="delete-button">Delete</button>
                   </div>
                 </div>
               </div>
@@ -75,67 +83,60 @@
         </form>
         </div>
 
-      <!-- Exercise Selection -->
-      <div v-else class="modal-body">
-        <!-- Add search bar above the filters -->
-        <div class="search-bar">
+        <!-- Exercise Selection -->
+        <div v-else class="modal-body exercise-selection">
+          <!-- Modal Actions at the Top -->
+          <div class="top-actions">
+            <button @click="hideExerciseSelection" class="cancel-button">Back</button>
+            <button @click="confirmExerciseSelection" class="submit-button">Add Selected</button>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="search-bar">
             <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder="Search exercises..."
-            class="search-input"
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="Search exercises..."
+              class="search-input"
             >
-        </div>
-        <div class="filters">
-          <div class="filter-group">
-            <label>Weight Type</label>
-            <select v-model="filters.weightType">
-              <option value="">All</option>
-              <option value="OTHER">Other</option>
-              <!-- Add other weight types -->
-            </select>
           </div>
+          
+          <!-- Exercise Filters -->
+          <ExerciseFilters 
+            :exercises="exercises"
+            @filter-change="handleFilterChange"
+          />
 
-          <div class="filter-group">
-            <label>Muscle Category</label>
-            <select v-model="filters.muscleCategory">
-              <option value="">All</option>
-              <option value="Legs">Legs</option>
-              <!-- Add other categories -->
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label>Muscle Groups</label>
-            <select v-model="filters.muscleGroups">
-              <option value="">All</option>
-              <option value="Quads">Quads</option>
-              <!-- Add other muscle groups -->
-            </select>
-          </div>
-        </div>
-
-        <div class="exercises-grid">
-          <div 
-            v-for="exercise in filteredExercises" 
-            :key="exercise.id"
-            class="exercise-card"
-            :class="{ selected: isExerciseSelected(exercise) }"
-            @click="toggleExercise(exercise)"
-          >
-            <div class="exercise-image">
-              <img :src="exercise.picture || '/placeholder.jpg'" alt="">
-            </div>
-            <div class="exercise-info">
-              <h3>{{ exercise.name }}</h3>
-              <p v-if="exercise.muscle_category">{{ exercise.muscle_category }}</p>
+          <!-- Exercises Grid -->
+          <div class="exercises-grid">
+            <div 
+              v-for="exercise in filteredExercises" 
+              :key="exercise.id" 
+              class="exercise-card" 
+              :class="{ selected: isExerciseSelected(exercise) }"
+            >
+              <div class="exercise-image" @click="toggleExercise(exercise)">
+                <img :src="exercise.picture || '/placeholder.jpg'" alt="">
+              </div>
+              <div class="exercise-info" @click="toggleExercise(exercise)">
+                <div class="info-row">
+                  <h3>{{ exercise.name }}</h3>
+                  <div class="info-icon" @click.stop="showInstructions(exercise)">i</div>
+                </div>
+                <p v-if="exercise.muscle_category">{{ exercise.muscle_category }}</p>
+              </div>
             </div>
           </div>
         </div>
-
-        <div class="modal-actions">
-          <button @click="hideExerciseSelection" class="cancel-button">Back</button>
-          <button @click="confirmExerciseSelection" class="submit-button">Add Selected</button>
+      <div v-if="activeInstructions" class="modal-overlay" @click="hideInstructions">
+        <div class="instruction-modal" @click.stop>
+          <h3>Instructions</h3>
+          <ul>
+            <li v-for="(instruction, index) in activeInstructions" :key="index">
+              {{ instruction }}
+            </li>
+          </ul>
+          <button @click="hideInstructions" class="close-button">×</button>
         </div>
       </div>
     </div>
@@ -143,26 +144,44 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, defineEmits } from 'vue';
 import { API_BASE_URL } from '../config';
+import ExerciseFilters from './ExerciseFilters.vue';
 
 const editMode = ref(false);
 const showModal = ref(false);
 const isExerciseSelection = ref(false);
 const exercises = ref([]);
-const selectedExercises = ref([]);
+const emits = defineEmits(['workoutUpdated']);
 const filters = ref({
-  weightType: '',
-  muscleCategory: '',
-  muscleGroups: ''
+  exerciseCategory: '',
+  exerciseEquipment: '',
+  primaryMuscles: ''
 });
-
+const filteredExercises = ref([]);
 const formData = ref({
   name: '',
   description: '',
   profile_id: 1, // You'll need to get this from your user profile
   exercises: []
 });
+
+const removeSet = (exercise, index) => {
+  exercise.sets.splice(index, 1);
+};
+
+const selectedExercises = ref([]);
+const handleFilterChange = (filters) => {
+  filteredExercises.value = exercises.value.filter(exercise => {
+    const categoryMatch = !filters.category || exercise.category === filters.category;
+    const equipmentMatch = !filters.equipment || exercise.equipment === filters.equipment;
+    const muscleMatch = !filters.muscle || 
+      exercise.primaryMuscles.includes(filters.muscle) || 
+      exercise.secondaryMuscles.includes(filters.muscle);
+    
+    return categoryMatch && equipmentMatch && muscleMatch;
+  });
+};
 
 const addSet = (exercise, e) => {
   e?.preventDefault();  // Add this line to prevent any default behavior
@@ -204,22 +223,6 @@ const fetchExercises = async () => {
 
 const searchQuery = ref('');
 
-// Update the filteredExercises computed property
-const filteredExercises = computed(() => {
-  return exercises.value.filter(exercise => {
-    // First check the search query
-    if (searchQuery.value && !exercise.name.toLowerCase().includes(searchQuery.value.toLowerCase())) {
-      return false;
-    }
-    
-    // Then check the other filters
-    if (filters.value.weightType && exercise.weight_type !== filters.value.weightType) return false;
-    if (filters.value.muscleCategory && exercise.muscle_category !== filters.value.muscleCategory) return false;
-    if (filters.value.muscleGroups && !exercise.muscle_groups?.includes(filters.value.muscleGroups)) return false;
-    return true;
-  });
-});
-
 const isExerciseSelected = (exercise) => {
   return selectedExercises.value.some(e => e.id === exercise.id);
 };
@@ -234,7 +237,7 @@ const toggleExercise = (exercise) => {
       exercise: {
         id: exercise.id,
         name: exercise.name,
-        measurement_type: exercise.measurement_type,
+        recorded_type: exercise.recorded_type,
         weight_type: exercise.weight_type,
       },
       exercise_id: exercise.id,
@@ -245,8 +248,42 @@ const toggleExercise = (exercise) => {
   }
 };
 
-const removeExercise = (exercise) => {
-  selectedExercises.value = selectedExercises.value.filter(e => e.id !== exercise.id);
+const removeExercise = async (exercise) => {
+  // Confirm deletion (optional)
+  if (!confirm(`Are you sure you want to delete the exercise: ${exercise.exercise.name}?`)) {
+    return;
+  }
+
+  // Remove from selected exercises array
+  selectedExercises.value = selectedExercises.value.filter((e) => e.id !== exercise.id);
+
+  // If the exercise is already saved in the backend, make an API call to delete it
+  if (editMode.value && exercise.id) {
+    try {
+      const profileId = localStorage.getItem('selectedProfileId');
+      const token = localStorage.getItem('token');
+      const workoutPlanId = formData.value.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutPlanId}/exercises/${exercise.id}/`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to delete exercise');
+      }
+
+      console.log(`Exercise ${exercise.id} deleted successfully.`);
+    } catch (error) {
+      console.error('Error deleting exercise:', error);
+    }
+  }
 };
 
 const showExerciseSelection = () => {
@@ -274,104 +311,41 @@ const handleSubmit = async () => {
       description: formData.value.description,
       profile_id: parseInt(profileId),
       exercises: selectedExercises.value.map(exercise => ({
-        exercise_id: exercise.id,
+        exercise_id: exercise.exercise_id,
         sets: exercise.sets.map(set => ({
-          reps: set.reps || 0,  // Default to 0 instead of null
-          weight: set.weight || 0, 
-          time: exercise.weight_type === 'TIME' ? (set.time || 0) : null,
-          completed: set.completed || false
+          reps: set.reps || 0,
+          weight: set.weight || 0,
+          time: set.time || 0,
+          completed: set.completed || false,
         }))
       }))
     };
 
-    // Use PUT for edit, POST for create
+    console.log('Submitting workoutData:', workoutData);
+
     const method = editMode.value ? 'PUT' : 'POST';
     const workoutId = editMode.value ? formData.value.id : '';
-    const url = editMode.value 
+    const url = editMode.value
       ? `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}`
       : `${API_BASE_URL}/api/profiles/${profileId}/workout_plans`;
 
-    const workoutResponse = await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(workoutData)
+      body: JSON.stringify(workoutData),
     });
 
-    if (!workoutResponse.ok) {
-      const error = await workoutResponse.json();
-      console.error('Workout operation error:', error);
-      throw new Error(`Failed to ${editMode.value ? 'update' : 'create'} workout`);
-    }
+    if (!response.ok) throw new Error('Failed to save workout');
+    const workout = await response.json();
 
-    const workout = await workoutResponse.json();
-
-    if (editMode.value) {
-      // Delete existing exercises
-      const existingExercises = await fetch(
-        `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}/exercises`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const exercises = await existingExercises.json();
-      
-      for (const exercise of exercises) {
-        await fetch(
-          `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutId}/exercises/${exercise.id}`,
-          {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        );
-      }
-    }
-
-    // Add exercises 
-    for (const exercise of selectedExercises.value) {
-      await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ exercise_id: exercise.id })
-      });
-    }
-
-    // Get exercises with IDs
-    const exercisesResponse = await fetch(
-      `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises`,
-      { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-    const exercises = await exercisesResponse.json();
-
-    // Add sets using returned exercise IDs
-    for (const [index, exercise] of exercises.entries()) {
-      const sets = selectedExercises.value[index].sets || [];
-      for (const set of sets) {
-        await fetch(
-          `${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workout.id}/exercises/${exercise.id}/sets`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              completed: set.completed,
-              weight: set.weight || 0,
-              reps: set.reps || 0,
-              time: set.time || 0
-            })
-          }
-        );
-      }
-    }
-
+    console.log('Workout saved:', workout);
+    emits('workoutUpdated');
     closeModal();
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error saving workout:', error);
   }
 };
 
@@ -399,6 +373,16 @@ const initializeEditForm = (plan) => {
 };
 
 defineExpose({ showModal, closeModal, editMode, initializeEditForm });
+
+const activeInstructions = ref(null);
+
+const showInstructions = (exercise) => {
+  activeInstructions.value = exercise.instructions;
+};
+
+const hideInstructions = () => {
+  activeInstructions.value = null;
+};
 </script>
 
 <style scoped>
@@ -432,11 +416,14 @@ defineExpose({ showModal, closeModal, editMode, initializeEditForm });
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--background-color);
+  padding-bottom: 0; /* Remove padding below the header */
+  margin-bottom: 0;
 }
 
 .modal-body {
   padding: 1rem;
   overflow-y: auto;
+  padding-top: 0;
 }
 
 .form-group {
@@ -565,13 +552,21 @@ input, textarea, select {
   color: var(--text-color);
 }
 
-.close-button {
-  background: none;
-  border: none;
-  color: var(--text-color);
-  font-size: 1.5rem;
-  cursor: pointer;
+.modal-header .close-button {
+ background: #dc3545;
+ color: white;
+ padding: 8px 16px;
+ border: none;
+ border-radius: 4px;
+ display: flex;
+ align-items: center;
+ gap: 8px;
 }
+
+.modal-header .close-button::after {
+ content: 'Close';
+}
+
 .search-bar {
   margin-bottom: 1rem;
 }
@@ -650,5 +645,107 @@ input, textarea, select {
 
 .set-header.time-layout {
   grid-template-columns: 40px 1fr 80px;
+}
+
+.info-row {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+}
+
+.info-icon {
+ width: 20px;
+ height: 20px;
+ border-radius: 50%;
+ background: rgba(255, 255, 255, 0.2);
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ cursor: pointer;
+ font-size: 12px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.instruction-modal {
+  background: var(--menu-bar-color);
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.instruction-modal .close-button {
+ background: #dc3545;
+ color: white;
+ padding: 8px 16px;
+ border: none;
+ border-radius: 4px;
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ margin-top: 16px;
+}
+
+.close-button::after {
+ content: 'Close';
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.3s;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+
+.top-actions {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background-color: var(--menu-bar-color);
+  z-index: 10;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Optional: Adds a separator line */
+  margin-top: 0; /* Remove any margin above the buttons */
+  padding-top: 0.5rem;
+}
+
+.exercise-header .delete-button {
+  margin-left: 10px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.3s;
+}
+
+.exercise-header .delete-button:hover {
+  background-color: #c82333;
 }
 </style>

@@ -17,6 +17,7 @@ class WorkoutPlan(Base):
         cascade="all, delete-orphan", 
         lazy="selectin"
     )
+    
 class WorkoutPlanExercise(Base):
     __tablename__ = "workout_plan_exercises"
 

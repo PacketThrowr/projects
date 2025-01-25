@@ -53,13 +53,13 @@ class WorkoutPlanBase(BaseModel):
 
 class WorkoutPlanCreate(WorkoutPlanBase):
     profile_id: int
-    exercises: List[WorkoutPlanExerciseCreate] = []
+    exercises: Optional[List[WorkoutPlanExerciseCreate]] = []
 
 
 class WorkoutPlan(WorkoutPlanBase):
     id: int
     profile_id: int
-    exercises: List[WorkoutPlanExercise] = []
+    exercises: Optional[List[WorkoutPlanExercise]] = []
     model_config = ConfigDict(from_attributes=True)
 
 class ExerciseAdd(BaseModel):
@@ -113,7 +113,7 @@ class WorkoutPlanExerciseCreate(BaseModel):
 class Exercise(BaseModel):
     id: int
     name: str
-    weight_type: Optional[str] = None
+    category: Optional[str] = None
     measurement_type: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 

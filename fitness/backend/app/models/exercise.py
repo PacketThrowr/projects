@@ -34,14 +34,17 @@ class Exercise(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
+    force = Column(String, nullable=True)
+    level = Column(String, nullable=True)
+    mechanic = Column(String, nullable=True)
+    equipment = Column(String, nullable=True)
+    primaryMuscles = Column(JSON, nullable=True)  # Changed to JSON for list support
+    secondaryMuscles = Column(JSON, nullable=True)  # Changed to JSON for list support
+    instructions = Column(JSON, nullable=True)  # Changed to JSON for list support
+    category = Column(String, nullable=True)
     picture = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
-    type = Column(String, nullable=False)
-    weight_type = Column(String, nullable=True)
-    muscle_category = Column(String, nullable=True)
-    muscle_groups = Column(JSON, nullable=True)
-    measurement_type = Column(String, nullable=False)
-
+    recorded_type = Column(String, nullable=True)
+    
     workout_exercises = relationship("WorkoutExercise", back_populates="exercise")
     cardio_sessions = relationship("CardioSession", back_populates="exercise", cascade="all, delete-orphan")
     workout_plan_exercises = relationship("WorkoutPlanExercise", back_populates="exercise")

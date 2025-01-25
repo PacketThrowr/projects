@@ -33,33 +33,38 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def create_workout_plan_for_profile(db: AsyncSession, profile_id: int, workout_plan_data: WorkoutPlanCreate):
+    logger.debug(f"Creating workout plan with data: {workout_plan_data}")
+
     # Create the workout plan
     created_plan = await create_workout_plan(db, workout_plan_data)
 
     # Add exercises to the workout plan
-    for exercise_data in workout_plan_data.exercises:
-        db_exercise = WorkoutPlanExercise(
-            workout_plan_id=created_plan.id,
-            exercise_id=exercise_data.exercise_id
-        )
-        db.add(db_exercise)
-        await db.flush()  # Ensure the exercise gets an ID before adding sets
-
-        # Add sets to the exercise
-        for set_data in exercise_data.sets:
-            db_set = WorkoutPlanSet(
-                exercise_id=db_exercise.id,
-                reps=set_data.reps,
-                weight=set_data.weight,
-                time=set_data.time,
-                completed=set_data.completed
+    if workout_plan_data.exercises:
+        for exercise_data in workout_plan_data.exercises:
+            logger.debug(f"Adding exercise: {exercise_data}")
+            db_exercise = WorkoutPlanExercise(
+                workout_plan_id=created_plan.id,
+                exercise_id=exercise_data.exercise_id
             )
-            db.add(db_set)
+            db.add(db_exercise)
+            await db.flush()
+
+            # Add sets to the exercise
+            for set_data in exercise_data.sets:
+                logger.debug(f"Adding set: {set_data}")
+                db_set = WorkoutPlanSet(
+                    exercise_id=db_exercise.id,
+                    reps=set_data.reps,
+                    weight=set_data.weight,
+                    time=set_data.time,
+                    completed=set_data.completed
+                )
+                db.add(db_set)
 
     # Commit all changes
     await db.commit()
 
-    # Reload the workout plan with its relationships eagerly loaded
+    # Reload the workout plan with relationships eagerly loaded
     result = await db.execute(
         select(WorkoutPlan)
         .options(
@@ -67,10 +72,12 @@ async def create_workout_plan_for_profile(db: AsyncSession, profile_id: int, wor
         )
         .where(WorkoutPlan.id == created_plan.id)
     )
-
     fully_loaded_plan = result.scalars().first()
 
-    # Use the Pydantic schema to serialize the SQLAlchemy object
+    # Debug log to confirm fully loaded data
+    logger.debug(f"Fully loaded workout plan: {fully_loaded_plan}")
+
+    # Serialize and return the response
     return WorkoutPlanSchema.from_orm(fully_loaded_plan)
 
 
@@ -85,7 +92,7 @@ async def get_workout_plans_for_profile(db: AsyncSession, profile_id: int):
         .where(WorkoutPlan.profile_id == profile_id)
     )
     return result.scalars().all()
-    
+
 async def get_workout_plan(db: AsyncSession, profile_id: int, workout_plan_id: int):
     result = await db.execute(
         select(WorkoutPlan).where(
@@ -150,8 +157,7 @@ async def add_exercise_to_workout_plan(
         "exercise": {
             "id": exercise.exercise.id,
             "name": exercise.exercise.name,
-            "description": exercise.exercise.description,
-            "weight_type": exercise.exercise.weight_type
+            "category": exercise.exercise.category
         },
         "sets": []
     }
@@ -211,8 +217,7 @@ async def get_workout_plan_exercises(db: AsyncSession, profile_id: int, workout_
         "exercise": {
             "id": exercise.exercise.id,
             "name": exercise.exercise.name,
-            "description": exercise.exercise.description,
-            "weight_type": exercise.exercise.weight_type
+            "category": exercise.exercise.category
         },
         "sets": [{
             "id": set.id,
@@ -316,43 +321,51 @@ async def delete_set_from_workout_plan(
     return True
 
 async def update_workout_plan_for_profile(db: AsyncSession, workout_plan_id: int, workout_plan_data: WorkoutPlanCreate):
-    # Previous code remains the same until commit()
+    # Fetch the existing plan
+    result = await db.execute(
+        select(WorkoutPlan).where(WorkoutPlan.id == workout_plan_id)
+    )
+    existing_plan = result.scalars().first()
+
+    if not existing_plan:
+        raise ValueError("Workout plan not found.")
+
+    # Update plan fields
+    existing_plan.name = workout_plan_data.name
+    existing_plan.description = workout_plan_data.description
+
+    # Update exercises
+    for exercise_data in workout_plan_data.exercises:
+        db_exercise = WorkoutPlanExercise(
+            workout_plan_id=workout_plan_id,
+            exercise_id=exercise_data.exercise_id
+        )
+        db.add(db_exercise)
+        await db.flush()
+
+        # Update or add sets
+        for set_data in exercise_data.sets:
+            db_set = WorkoutPlanSet(
+                exercise_id=db_exercise.id,
+                reps=set_data.reps,
+                weight=set_data.weight,
+                time=set_data.time,
+                completed=set_data.completed
+            )
+            db.add(db_set)
+
+    # Commit changes
     await db.commit()
 
-    # Load updated workout plan with relationships
+    # Reload the plan with relationships eagerly loaded
     result = await db.execute(
         select(WorkoutPlan)
         .options(
-            selectinload(WorkoutPlan.exercises).selectinload(WorkoutPlanExercise.exercise),
             selectinload(WorkoutPlan.exercises).selectinload(WorkoutPlanExercise.sets)
         )
         .where(WorkoutPlan.id == workout_plan_id)
     )
-    plan = result.scalars().first()
+    updated_plan = result.scalars().first()
 
-    # Manually construct response
-    return {
-        "id": plan.id,
-        "name": plan.name,
-        "description": plan.description,
-        "profile_id": plan.profile_id,
-        "exercises": [{
-            "id": exercise.id,
-            "exercise_id": exercise.exercise_id,
-            "workout_plan_id": exercise.workout_plan_id,  # Add this line
-            "exercise": {
-                "id": exercise.exercise.id,
-                "name": exercise.exercise.name,
-                "description": exercise.exercise.description,
-                "weight_type": exercise.exercise.weight_type
-            },
-            "sets": [{
-                "id": set.id,
-                "reps": set.reps,
-                "weight": set.weight,
-                "time": set.time,
-                "completed": set.completed,
-                "exercise_id": set.exercise_id
-            } for set in exercise.sets]
-        } for exercise in plan.exercises]
-    }
+    # Return the updated plan
+    return WorkoutPlanSchema.from_orm(updated_plan)

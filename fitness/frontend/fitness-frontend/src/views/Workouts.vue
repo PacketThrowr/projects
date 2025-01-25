@@ -28,7 +28,7 @@
               <div v-if="menuStates[plan.id]" class="menu">
                 <button @click="startWorkout">Start Workout</button>
                 <button @click="editWorkout(plan)">Edit</button>
-                <button @click="deleteWorkout(plan.id)">Delete</button>
+                <button @click="showDeleteConfirmationModal(plan.id)">Delete</button>
               </div>
             </div>
             <h3>{{ plan.name }}</h3>
@@ -63,7 +63,18 @@
     </section>
 
     <!-- Add Workout Modal -->
-    <AddWorkoutModal ref="addWorkoutModal" />
+    <AddWorkoutModal ref="addWorkoutModal" @workoutUpdated="fetchWorkoutPlans" />
+
+    <!-- Confirmation Modal -->
+    <div v-if="showDeleteConfirmation" class="confirmation-modal">
+      <div class="confirmation-content">
+        <p>Are you sure you want to delete this workout plan?</p>
+        <div class="confirmation-actions">
+          <button @click="confirmDeleteWorkout" class="confirm-button">Yes, Delete</button>
+          <button @click="cancelDelete" class="cancel-button">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -78,6 +89,9 @@ const plansContainer = ref(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
 const menuStates = ref({});
+
+const showDeleteConfirmation = ref(false);
+const workoutPlanToDelete = ref(null);
 
 const editWorkout = (plan) => {
  addWorkoutModal.value.showModal = true;
@@ -113,20 +127,34 @@ const fetchWorkoutPlans = async () => {
   }
 };
 
-const deleteWorkout = async (id) => {
- try {
-   const profileId = localStorage.getItem('selectedProfileId');
-   const token = localStorage.getItem('token');
-   await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${id}`, {
-     method: 'DELETE',
-     headers: {
-       'Authorization': `Bearer ${token}`
-     }
-   });
-   fetchWorkoutPlans();
- } catch (error) {
-   console.error('Error deleting workout:', error);
- }
+const showDeleteConfirmationModal = (id) => {
+  workoutPlanToDelete.value = id;
+  showDeleteConfirmation.value = true;
+};
+
+const confirmDeleteWorkout = async () => {
+  if (!workoutPlanToDelete.value) return;
+
+  try {
+    const profileId = localStorage.getItem('selectedProfileId');
+    const token = localStorage.getItem('token');
+    await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutPlanToDelete.value}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    });
+    fetchWorkoutPlans();
+  } catch (error) {
+    console.error('Error deleting workout:', error);
+  } finally {
+    cancelDelete();
+  }
+};
+
+const cancelDelete = () => {
+  workoutPlanToDelete.value = null;
+  showDeleteConfirmation.value = false;
 };
 
 const checkScroll = () => {

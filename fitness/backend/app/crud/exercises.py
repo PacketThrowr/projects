@@ -2,7 +2,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
 from app.models.exercise import Exercise
-from app.schemas.exercise import ExerciseCreate, MeasurementType, WeightType, ExerciseType
+from app.schemas.exercise import ExerciseCreate
 from app.schemas.exercise import Exercise as ExerciseSchema
 from app.models.workout import WorkoutSet, WorkoutExercise
 import logging
@@ -31,12 +31,15 @@ async def create_exercise(db: AsyncSession, exercise: ExerciseCreate):
         db_exercise = Exercise(
             name=exercise.name,
             picture=exercise.picture,
-            description=exercise.description,
-            type=exercise.type.value,  # Use the enum value directly
-            weight_type=exercise.weight_type.value if exercise.weight_type else None,
-            muscle_category=exercise.muscle_category,
-            muscle_groups=exercise.muscle_groups,
-            measurement_type=exercise.measurement_type.value
+            force=exercise.force,  # New field
+            level=exercise.level,  # New field
+            mechanic=exercise.mechanic,  # New field
+            equipment=exercise.equipment,  # New field
+            primaryMuscles=exercise.primaryMuscles,  # New field
+            secondaryMuscles=exercise.secondaryMuscles,  # New field
+            instructions=exercise.instructions,  # New field
+            category=exercise.category,
+            recorded_type=exercise.recorded_type  # New field
         )
         db.add(db_exercise)
         await db.commit()
@@ -49,18 +52,15 @@ async def create_exercise(db: AsyncSession, exercise: ExerciseCreate):
 
 
 async def update_exercise(db: AsyncSession, exercise_id: int, updated_exercise: ExerciseCreate):
-    # Changed to search by ID instead of name
     stmt = select(Exercise).where(Exercise.id == exercise_id)
     result = await db.execute(stmt)
     db_exercise = result.scalars().first()
     
     if not db_exercise:
         return None
-    
+
     # Update the exercise with the new values
-    for field, value in updated_exercise.model_dump(exclude_unset=True).items():  # Changed from dict() to model_dump()
-        if field == 'muscle_groups' and value is not None:
-            value = value
+    for field, value in updated_exercise.model_dump(exclude_unset=True).items():
         if field in ['type', 'weight_type', 'measurement_type'] and value is not None:
             value = value.value  # Extract enum value
         setattr(db_exercise, field, value)
@@ -96,15 +96,17 @@ async def delete_exercise(db: AsyncSession, exercise_id: int):
         logging.error(f"Error deleting exercise: {str(e)}")
         raise
 
-async def get_set_exercise_type(db: AsyncSession, set_id: int):
-    """Get the exercise type for a given set"""
+'''
+async def get_set_exercise_category(db: AsyncSession, set_id: int):
+    """Get the exercise category for a given set"""
     stmt = (
-        select(Exercise.type)
+        select(Exercise.category)  # Fetch the category instead of type
         .select_from(WorkoutSet)
-        .join(WorkoutExercise, WorkoutSet.workout_exercise_id == WorkoutExercise.id)  # Change to workout_exercise_id
+        .join(WorkoutExercise, WorkoutSet.workout_exercise_id == WorkoutExercise.id)
         .join(Exercise, WorkoutExercise.exercise_id == Exercise.id)
         .where(WorkoutSet.id == set_id)
     )
     result = await db.execute(stmt)
-    exercise_type = result.scalar()
-    return {"exercise_type": exercise_type} if exercise_type else None
+    exercise_category = result.scalar()
+    return {"exercise_category": exercise_category} if exercise_category else None
+    '''

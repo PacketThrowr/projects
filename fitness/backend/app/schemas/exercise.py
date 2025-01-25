@@ -28,33 +28,16 @@ class MeasurementType(str, Enum):
 # Base schema
 class ExerciseBase(BaseModel):
     name: str
+    force: Optional[str] = None
+    level: Optional[str] = None
+    mechanic: Optional[str] = None
+    equipment: Optional[str] = None
+    primaryMuscles: Optional[List[str]] = None
+    secondaryMuscles: Optional[List[str]] = None
+    instructions: Optional[List[str]] = None
+    category: Optional[str] = None
     picture: Optional[str] = None
-    description: Optional[str] = None
-    type: ExerciseType
-    weight_type: Optional[WeightType] = None
-    muscle_category: Optional[str] = None
-    muscle_groups: Optional[List[str]] = None
-    measurement_type: MeasurementType
-
-    @model_validator(mode='before')
-    @classmethod
-    def normalize_enum_values(cls, data):
-        """
-        Ensure enum fields are normalized correctly.
-        """
-        if not isinstance(data, dict):
-            return data
-            
-        if isinstance(data.get("weight_type"), str):
-            data["weight_type"] = data["weight_type"].upper()
-        if isinstance(data.get("type"), str):
-            data["type"] = data["type"].upper()
-        if isinstance(data.get("measurement_type"), str):
-            data["measurement_type"] = data["measurement_type"].upper()
-        return data
-
-
-
+    recorded_type: Optional[str] = None
 
 class ExerciseCreate(ExerciseBase):
     pass
