@@ -13,7 +13,9 @@ class Workout(Base):
     profile_id = Column(Integer, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     exercises = relationship("WorkoutExercise", back_populates="workout", cascade="all, delete-orphan")
     date = Column(String, nullable=False)
-    
+    start_time = Column(String, nullable=True)
+    end_time = Column(String, nullable=True)
+
     profile = relationship("Profile", back_populates="workouts")
 
 class WorkoutExercise(Base):
@@ -31,8 +33,8 @@ class WorkoutSet(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     exercise_id = Column(Integer, ForeignKey("workout_exercises.id", ondelete="CASCADE"))
-    reps = Column(Integer, nullable=True)
-    weight = Column(Float, nullable=True)
-    time = Column(Float, nullable=True)
+    reps = Column(Integer, nullable=True, default=0)  # Default to 0 if not provided
+    weight = Column(Float, nullable=True, default=0.0)
+    time = Column(Float, nullable=True, default=0.0)
     completed = Column(Integer, default=0)  # Boolean represented as 0/1
     exercise = relationship("WorkoutExercise", back_populates="sets")

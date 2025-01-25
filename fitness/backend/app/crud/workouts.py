@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.models.profile import Profile  # Ensure this is the SQLAlchemy model
 from typing import Optional
 from sqlalchemy import delete, exists
+from datetime import datetime
 
 async def create_workout(db: AsyncSession, workout: WorkoutCreate):
     # Validate profile existence
@@ -18,37 +19,20 @@ async def create_workout(db: AsyncSession, workout: WorkoutCreate):
     db_profile = result.scalars().first()
     if not db_profile:
         raise ValueError(f"Profile with ID {workout.profile_id} does not exist")
-
+    current_datetime = datetime.now()
+    current_time_str = current_datetime.time().strftime("%H:%M:%S")
     # Create the workout
     db_workout = Workout(
         name=workout.name,
         description=workout.description,
         profile_id=workout.profile_id,
+        date=datetime.now().strftime("%Y-%m-%d"),
+        start_time=current_time_str,
+        end_time=workout.end_time
     )
     db.add(db_workout)
     await db.commit()
     await db.refresh(db_workout)
-
-    # Add exercises and sets
-    for exercise in workout.exercises:
-        db_workout_exercise = WorkoutExercise(
-            workout_id=db_workout.id,
-            exercise_id=exercise.exercise_id,
-        )
-        db.add(db_workout_exercise)
-        await db.commit()
-        await db.refresh(db_workout_exercise)
-
-        for set_data in exercise.sets:
-            db_set = WorkoutSet(
-                workout_exercise_id=db_workout_exercise.id,
-                reps=set_data.reps,
-                weight=set_data.weight,
-                time=set_data.time,
-                completed=set_data.completed,
-            )
-            db.add(db_set)
-            await db.commit()
 
     return await get_workout(db, db_workout.id)  # Fetch and return the full workout with exercises and sets
 
@@ -167,36 +151,47 @@ async def add_set_to_exercise(
     profile_id: int,
     workout_id: int,
     exercise_id: int,
-    set_data: dict
+    set_data: dict,
 ) -> WorkoutSet:
     """
-    Add a new set to a workout exercise
+    Add a new set to a workout exercise.
+    Validates that the workout and exercise belong to the correct profile.
     """
     # Verify the workout exercise exists and belongs to this profile
-    workout_exercise = await db.execute(
+    result = await db.execute(
         select(WorkoutExercise)
         .join(Workout)
         .where(
             WorkoutExercise.id == exercise_id,
             Workout.id == workout_id,
-            Workout.profile_id == profile_id
+            Workout.profile_id == profile_id,
         )
     )
-    db_workout_exercise = workout_exercise.scalars().first()
-    
+    db_workout_exercise = result.scalars().first()
+
     if not db_workout_exercise:
         raise ValueError("Exercise not found in workout")
+
+    # Validate that either 'reps' or 'time' is provided in `set_data`
+    reps = set_data.get("reps")
+    time = set_data.get("time")
+
+    if reps is None and time is None:
+        raise ValueError("Either 'reps' or 'time' must be provided (not both null).")
 
     # Create the new set
     new_set = WorkoutSet(
         exercise_id=db_workout_exercise.id,
-        **set_data
+        reps=reps if reps is not None else 0,
+        time=time if time is not None else 0.0,
+        weight=set_data.get("weight", 0.0),
+        completed=set_data.get("completed", False),
     )
-    
+
     db.add(new_set)
     await db.commit()
     await db.refresh(new_set)
-    
+
     return new_set
 
 async def update_workout(

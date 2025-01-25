@@ -64,6 +64,11 @@ const routes = [
       name: 'Workouts',
       component: () => import('../views/Workouts.vue')
     },
+    {
+      path: '/workout/:id',
+      name: 'WorkoutId',
+      component: () => import('../views/WorkoutId.vue')
+    },
   ];
 
 const router = createRouter({

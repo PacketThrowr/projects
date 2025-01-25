@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator, ConfigDict
+from pydantic import BaseModel, model_validator, ConfigDict, Field
 from typing import List, Optional
 from enum import Enum
 
@@ -9,12 +9,12 @@ class WorkoutSetBase(BaseModel):
     time: Optional[float] = None
     completed: bool = False
 
-    @model_validator(mode='after')
-    def validate_set(self) -> 'WorkoutSetBase':
-        values = self
-        if not values.reps and not values.time:
-            raise ValueError("Either 'reps' or 'time' must be provided.")
-        return values
+    @model_validator(mode="after")
+    def validate_reps_and_time(self):
+        # Both `reps` and `time` can be 0, but they cannot both be None
+        if self.reps is None and self.time is None:
+            raise ValueError("Either 'reps' or 'time' must be provided (not both null).")
+        return self
 
 class WorkoutSetCreate(WorkoutSetBase):
     pass
@@ -44,6 +44,8 @@ class WorkoutBase(BaseModel):
     name: str
     description: Optional[str] = None
     date: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
 
 class WorkoutCreate(WorkoutBase):
     profile_id: int
@@ -67,26 +69,17 @@ class SetType(str, Enum):
     CARDIO = "CARDIO"
 
 class SetBaseUpdate(BaseModel):
-    completed: Optional[bool] = None
+    completed: Optional[bool] = False
 
 class WeightSetUpdate(SetBaseUpdate):
-    weight: Optional[float] = None
-    reps: Optional[int] = None
-
-    @model_validator(mode='after')
-    def validate_weight_set(self) -> 'WeightSetUpdate':
-        if not self.weight and not self.reps and self.completed is None:
-            raise ValueError("At least one field must be provided")
-        return self
+    reps: Optional[int] = Field(None, description="Number of repetitions")
+    weight: Optional[float] = Field(None, description="Weight lifted")
+    time: Optional[float] = Field(None, description="Time for exercise")
+    completed: bool = Field(False, description="Whether the set is completed")
 
 class CardioSetUpdate(SetBaseUpdate):
-    time: Optional[float] = None
-
-    @model_validator(mode='after')
-    def validate_cardio_set(self) -> 'CardioSetUpdate':
-        if not self.time and self.completed is None:
-            raise ValueError("At least one field must be provided")
-        return self
+    distance: Optional[float] = None
+    completed: bool = False
         
 class SetUpdate(BaseModel):
     type: SetType

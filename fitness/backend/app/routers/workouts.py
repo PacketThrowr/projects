@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.database import async_session_maker
 from app.schemas.exercise import ExerciseSchema
 from app.schemas.workout import (
@@ -12,6 +13,9 @@ from app.schemas.workout import (
     CardioSetUpdate,
     ExerciseAdd,
     WorkoutExerciseSchema
+)
+from app.models.workout_plan import (
+    WorkoutPlan
 )
 from app.crud.workouts import (
     create_workout,
@@ -32,6 +36,8 @@ from app import crud
 from app.utils import validate_user_profile
 import logging
 from sqlalchemy import select
+from datetime import datetime
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -65,6 +71,23 @@ async def create_workout_for_profile(
     await validate_user_profile(db, user, profile_id)
     workout.profile_id = profile_id
     return await crud.create_workout(db, workout)
+
+@router.get("/profiles/{profile_id}/workouts/{workout_id}/")
+async def get_workout(profile_id: int, workout_id: int, db: AsyncSession = Depends(get_db)):
+    # Use select with the SQLAlchemy ORM model
+    query = (
+        select(WorkoutModel)
+        .options(selectinload(WorkoutModel.exercises).selectinload(WorkoutExercise.sets))
+        .filter(WorkoutModel.id == workout_id, WorkoutModel.profile_id == profile_id)
+    )
+    result = await db.execute(query)
+    workout = result.scalars().first()
+
+    if not workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+
+    # Convert the ORM object to the Pydantic schema
+    return WorkoutSchema.from_orm(workout)
 
 @router.put("/profiles/{profile_id}/workouts/{workout_id}/", response_model=WorkoutSchema)
 async def update_workout_route(
@@ -188,13 +211,19 @@ async def add_set_to_exercise_route(
     if not db_profile or db_profile.user_id != user.id:
         raise HTTPException(status_code=404, detail="Profile not found")
 
+    # Validate 'reps' or 'time' are not both None
+    reps = getattr(set_data, "reps", None)
+    time = getattr(set_data, "time", None)
+    if reps is None and time is None:
+        raise HTTPException(status_code=400, detail="Either 'reps' or 'time' must be provided (not both null).")
+
     try:
         new_set = await crud.add_set_to_exercise(
-            db, 
-            profile_id, 
-            workout_id, 
-            exercise_id, 
-            set_data.model_dump(exclude_unset=True)
+            db,
+            profile_id,
+            workout_id,
+            exercise_id,
+            set_data.model_dump(exclude_unset=True),
         )
         return new_set
     except ValueError as e:
@@ -248,3 +277,60 @@ async def delete_exercise_set_route(
     if not deleted:
         raise HTTPException(status_code=404, detail="Set not found")
     return {"message": "Set deleted"}
+
+@router.post("/profiles/{profile_id}/workouts/from-plan/{workout_plan_id}")
+async def create_workout_from_plan(profile_id: int, workout_plan_id: int, db: AsyncSession = Depends(get_db)):
+    # Fetch the workout plan
+    result = await db.execute(select(WorkoutPlan).where(WorkoutPlan.id == workout_plan_id))
+    workout_plan = result.scalars().first()
+
+    if not workout_plan:
+        raise HTTPException(status_code=404, detail="Workout plan not found")
+
+    current_datetime = datetime.now()
+    current_time = current_datetime.time()
+    
+    # Create a new workout with the current datetime as start_time
+    db_workout = WorkoutModel(
+        name=workout_plan.name,
+        description=workout_plan.description,
+        date=datetime.now().strftime("%Y-%m-%d"),  # Date only
+        start_time=current_time,  # Full datetime for start_time
+        profile_id=profile_id,
+    )
+    db.add(db_workout)
+    await db.flush()  # Flush to get the ID of the newly created workout
+
+    # Add exercises from the workout plan
+    for exercise in workout_plan.exercises:
+        db_exercise = WorkoutExercise(
+            workout_id=db_workout.id,  # Associate the exercise with the workout
+            exercise_id=exercise.exercise_id
+        )
+
+        # Add sets to each exercise
+        db_exercise.sets = [
+            WorkoutSetModel(
+                reps=workout_set.reps or 0,
+                weight=workout_set.weight or 0.0,
+                time=workout_set.time or 0.0,
+                completed=False
+            )
+            for workout_set in exercise.sets
+        ]
+        db.add(db_exercise)  # Add the exercise to the session
+
+    await db.commit()  # Commit all changes
+
+    # Fetch the workout with relationships for the response
+    result = await db.execute(
+        select(WorkoutModel)
+        .options(selectinload(WorkoutModel.exercises).selectinload(WorkoutExercise.sets))
+        .where(WorkoutModel.id == db_workout.id)
+    )
+    db_workout_with_relationships = result.scalars().first()
+
+    if not db_workout_with_relationships.exercises:
+        raise HTTPException(status_code=500, detail="No exercises found for this workout")
+
+    return WorkoutSchema.from_orm(db_workout_with_relationships)

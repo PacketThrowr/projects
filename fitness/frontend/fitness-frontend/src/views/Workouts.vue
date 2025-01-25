@@ -26,7 +26,7 @@
             <div class="menu-button">
               <button @click.stop="toggleMenu(plan.id)" class="dots-button">⋮</button>
               <div v-if="menuStates[plan.id]" class="menu">
-                <button @click="startWorkout">Start Workout</button>
+                <button @click="startWorkout(plan)">Start Workout</button>
                 <button @click="editWorkout(plan)">Edit</button>
                 <button @click="showDeleteConfirmationModal(plan.id)">Delete</button>
               </div>
@@ -92,6 +92,105 @@ const menuStates = ref({});
 
 const showDeleteConfirmation = ref(false);
 const workoutPlanToDelete = ref(null);
+
+const startWorkout = async (plan) => {
+  try {
+    const token = localStorage.getItem("token");
+    const profileId = localStorage.getItem("selectedProfileId");
+    const today = new Date().toISOString().split('T')[0];
+
+    // Create workout
+    const workoutResponse = await fetch(
+      `${API_BASE_URL}/api/profiles/${profileId}/workouts/`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: plan.name,
+          description: plan.description,
+          profile_id: parseInt(profileId),
+          date: today,
+          start_time: null,
+          end_time: null,
+        })
+      }
+    );
+
+    if (!workoutResponse.ok) throw new Error("Failed to create workout");
+    const workout = await workoutResponse.json();
+
+    // Add exercises and their sets
+    for (const planExercise of plan.exercises) {
+      // Create exercise
+      const exerciseResponse = await fetch(
+        `${API_BASE_URL}/api/profiles/${profileId}/workouts/${workout.id}/exercises/`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            exercise_name: planExercise.exercise.name
+          })
+        }
+      );
+
+      if (!exerciseResponse.ok) throw new Error("Failed to create exercise");
+      
+      // Get exercise ID from workout_exercises of this workout
+      const getExercisesResponse = await fetch(
+        `${API_BASE_URL}/api/profiles/${profileId}/workouts/${workout.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        }
+      );
+
+      const workoutDetails = await getExercisesResponse.json();
+      if (!workoutDetails.exercises || workoutDetails.exercises.length === 0) {
+        throw new Error("No exercises found for this workout.");
+      }
+      const workoutExercise = workoutDetails.exercises[workoutDetails.exercises.length - 1];
+      if (!workoutExercise.id) {
+        throw new Error("Exercise ID not found in workout details.");
+      }
+
+      // Create sets with the proper exercise ID
+      for (const set of planExercise.sets) {
+        const setResponse = await fetch(
+          `${API_BASE_URL}/api/profiles/${profileId}/workouts/${workout.id}/exercises/${workoutExercise.id}/sets/`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              completed: false,
+              weight: set.weight,
+              reps: set.reps,
+              time: set.time || 0
+            })
+          }
+        );
+        
+        if (!setResponse.ok) {
+          const error = await setResponse.text();
+          throw new Error("Failed to create set: " + error);
+        }
+      }
+    }
+
+    window.location.href = `/workout/${workout.id}`;
+  } catch (error) {
+    console.error("Error starting workout:", error);
+  }
+};
 
 const editWorkout = (plan) => {
  addWorkoutModal.value.showModal = true;

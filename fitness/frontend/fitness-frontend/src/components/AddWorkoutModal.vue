@@ -158,7 +158,23 @@ const filters = ref({
   exerciseEquipment: '',
   primaryMuscles: ''
 });
-const filteredExercises = ref([]);
+
+const filteredExercises = computed(() => {
+  return exercises.value.filter(exercise => {
+    const matchesSearch =
+      searchQuery.value.trim() === '' ||
+      exercise.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+
+    const matchesFilters =
+      (!filters.value.exerciseCategory || exercise.category === filters.value.exerciseCategory) &&
+      (!filters.value.exerciseEquipment || exercise.equipment === filters.value.exerciseEquipment) &&
+      (!filters.value.primaryMuscles ||
+        exercise.primaryMuscles.includes(filters.value.primaryMuscles));
+
+    return matchesSearch && matchesFilters;
+  });
+});
+
 const formData = ref({
   name: '',
   description: '',
