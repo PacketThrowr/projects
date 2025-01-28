@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field, ValidationError, model_validator, root_va
 from typing import Optional, List
 from enum import Enum
 
-
 # Define enumerations
 class ExerciseType(str, Enum):
     CARDIO = "CARDIO"

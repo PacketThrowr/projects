@@ -41,7 +41,12 @@ async def get_workouts_for_profile(db: AsyncSession, profile_id: int):
     result = await db.execute(
         select(Workout)
         .where(Workout.profile_id == profile_id)
-        .options(selectinload(Workout.exercises).selectinload(WorkoutExercise.sets))
+        .options(
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.sets),
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.exercise)  
+        )
     )
     return result.scalars().all()
 
@@ -49,7 +54,12 @@ async def get_workout(db: AsyncSession, workout_id: int):
     result = await db.execute(
         select(Workout)
         .where(Workout.id == workout_id)
-        .options(selectinload(Workout.exercises).selectinload(WorkoutExercise.sets))
+        .options(
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.sets),
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.exercise)  # Add this line to load exercise data
+        )
     )
     return result.scalars().first()
 
@@ -64,12 +74,11 @@ async def get_workouts(db: AsyncSession):
 
 
 async def update_workout_set(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int, set_id: int, updates: dict):
+    # First verify the set exists and belongs to the correct workout/profile
     stmt = (
-        select(WorkoutSet, Exercise.type.label('exercise_type'))
-        .select_from(WorkoutSet)
+        select(WorkoutSet)
         .join(WorkoutExercise, WorkoutSet.exercise_id == WorkoutExercise.id)
         .join(Workout, WorkoutExercise.workout_id == Workout.id)
-        .join(Exercise, WorkoutExercise.exercise_id == Exercise.id)
         .where(
             Workout.profile_id == profile_id,
             Workout.id == workout_id,
@@ -78,20 +87,12 @@ async def update_workout_set(db: AsyncSession, profile_id: int, workout_id: int,
         )
     )
     result = await db.execute(stmt)
-    row = result.first()
+    db_set = result.scalar_one_or_none()
     
-    if not row:
+    if not db_set:
         return None
-        
-    db_set, exercise_type = row
 
-    # Validate updates match exercise type
-    if exercise_type == "CARDIO" and ('weight' in updates or 'reps' in updates):
-        raise ValueError("Cannot update weight/reps for a cardio exercise")
-    if exercise_type == "WEIGHTS" and 'time' in updates:
-        raise ValueError("Cannot update time for a weight exercise")
-
-    # Update only valid fields
+    # Update the set values
     for key, value in updates.items():
         if hasattr(db_set, key):
             setattr(db_set, key, value)
@@ -249,6 +250,40 @@ async def update_workout(
     # Return the full workout with its relationships loaded
     return await get_workout(db, workout_id)
 
+async def update_workout_end_time(
+    db: AsyncSession, 
+    profile_id: int, 
+    workout_id: int, 
+    end_time: str
+) -> Optional[Workout]:
+    # Verify the workout exists and belongs to the profile
+    query = (
+        select(Workout)
+        .where(
+            Workout.id == workout_id,
+            Workout.profile_id == profile_id
+        )
+        .options(
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.sets),
+            selectinload(Workout.exercises)
+            .selectinload(WorkoutExercise.exercise)  # Add this line to load exercise data
+        )
+    )
+    result = await db.execute(query)
+    db_workout = result.scalars().first()
+
+    if not db_workout:
+        return None
+
+    # Update only the end_time field
+    db_workout.end_time = end_time
+    await db.commit()
+    await db.refresh(db_workout)
+    
+    # Return the full workout with its relationships loaded
+    return db_workout  # We can return directly since we loaded all relationships
+    
 async def delete_workout_exercise(db: AsyncSession, profile_id: int, workout_id: int, exercise_id: int):
     stmt = (
         delete(WorkoutExercise)

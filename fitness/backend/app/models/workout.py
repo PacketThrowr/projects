@@ -26,7 +26,7 @@ class WorkoutExercise(Base):
     exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="CASCADE"))
     workout = relationship("Workout", back_populates="exercises")
     exercise = relationship("Exercise", back_populates="workout_exercises")
-    sets = relationship("WorkoutSet", back_populates="exercise", cascade="all, delete-orphan")
+    sets = relationship("WorkoutSet", back_populates="exercise", cascade="all, delete-orphan", lazy="selectin")
 
 class WorkoutSet(Base):
     __tablename__ = "workout_sets"

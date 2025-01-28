@@ -71,13 +71,17 @@ async def create_workout_for_profile(
     await validate_user_profile(db, user, profile_id)
     workout.profile_id = profile_id
     return await crud.create_workout(db, workout)
-
-@router.get("/profiles/{profile_id}/workouts/{workout_id}/")
+@router.get("/profiles/{profile_id}/workouts/{workout_id}")
+@router.get("/profiles/{profile_id}/workouts/{workout_id}/", include_in_schema=False)
 async def get_workout(profile_id: int, workout_id: int, db: AsyncSession = Depends(get_db)):
-    # Use select with the SQLAlchemy ORM model
     query = (
         select(WorkoutModel)
-        .options(selectinload(WorkoutModel.exercises).selectinload(WorkoutExercise.sets))
+        .options(
+            selectinload(WorkoutModel.exercises)
+            .selectinload(WorkoutExercise.sets),  # Load sets for exercises
+            selectinload(WorkoutModel.exercises)
+            .selectinload(WorkoutExercise.exercise),  # Load the related exercise
+        )
         .filter(WorkoutModel.id == workout_id, WorkoutModel.profile_id == profile_id)
     )
     result = await db.execute(query)
@@ -89,11 +93,11 @@ async def get_workout(profile_id: int, workout_id: int, db: AsyncSession = Depen
     # Convert the ORM object to the Pydantic schema
     return WorkoutSchema.from_orm(workout)
 
-@router.put("/profiles/{profile_id}/workouts/{workout_id}/", response_model=WorkoutSchema)
+@router.put("/profiles/{profile_id}/workouts/{workout_id}", response_model=WorkoutSchema)
 async def update_workout_route(
     profile_id: int,
     workout_id: int,
-    workout_update: WorkoutCreate,
+    workout_update: dict,  # Change to dict to accept partial updates
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_active_user),
 ):
@@ -101,14 +105,31 @@ async def update_workout_route(
     await validate_user_profile(db, user, profile_id)
     
     try:
-        updated_workout = await crud.update_workout(db, profile_id, workout_id, workout_update)
+        if 'end_time' in workout_update:
+            # If only updating end_time, use the specialized function
+            updated_workout = await crud.update_workout_end_time(
+                db, 
+                profile_id, 
+                workout_id, 
+                workout_update['end_time']
+            )
+        else:
+            # For full workout updates, use the existing function
+            updated_workout = await crud.update_workout(
+                db, 
+                profile_id, 
+                workout_id, 
+                WorkoutCreate(**workout_update)
+            )
+
         if not updated_workout:
             raise HTTPException(status_code=404, detail="Workout not found")
         return updated_workout
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-        
-@router.delete("/profiles/{profile_id}/workouts/{workout_id}/", response_model=dict)
+
+@router.delete("/profiles/{profile_id}/workouts/{workout_id}", response_model=dict)          
+@router.delete("/profiles/{profile_id}/workouts/{workout_id}/", response_model=dict, include_in_schema=False)
 async def delete_workout_route(
     profile_id: int,
     workout_id: int,
@@ -125,6 +146,37 @@ async def delete_workout_route(
     if not success:
         raise HTTPException(status_code=404, detail="Workout not found")
     return {"message": f"Workout with ID {workout_id} has been deleted"}
+
+@router.put("/profiles/{profile_id}/workouts/{workout_id}/exercises/{exercise_id}/sets/{set_id}", response_model=WorkoutSetSchema)
+async def update_workout_set_route(
+    profile_id: int,
+    workout_id: int,
+    exercise_id: int,
+    set_id: int,
+    set_data: WeightSetUpdate | CardioSetUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_active_user),
+):
+    logger.info(f"Updating set {set_id} for profile {profile_id} in workout {workout_id}")
+
+    db_profile = await crud.get_profile_by_id(db, profile_id)
+    if not db_profile or db_profile.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    try:
+        db_set = await update_workout_set(
+            db, 
+            profile_id,
+            workout_id,
+            exercise_id,
+            set_id, 
+            set_data.model_dump(exclude_unset=True)
+        )
+        if not db_set:
+            raise HTTPException(status_code=404, detail="Set not found")
+        return db_set
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/profiles/{profile_id}/workouts/{workout_id}/exercises/", response_model=list[WorkoutExerciseSchema])
 async def get_workout_exercises_route(

@@ -24,11 +24,11 @@
             class="plan-tile"
           >
             <div class="menu-button">
-              <button @click.stop="toggleMenu(plan.id)" class="dots-button">⋮</button>
-              <div v-if="menuStates[plan.id]" class="menu">
+              <button @click.stop="toggleMenu(plan.id, 'plan')" class="dots-button">⋮</button>
+              <div v-if="menuStates.plans[plan.id]" class="menu">
                 <button @click="startWorkout(plan)">Start Workout</button>
                 <button @click="editWorkout(plan)">Edit</button>
-                <button @click="showDeleteConfirmationModal(plan.id)">Delete</button>
+                <button @click="showDeleteConfirmationModal(plan.id, 'plan')">Delete</button>
               </div>
             </div>
             <h3>{{ plan.name }}</h3>
@@ -48,9 +48,25 @@
 
     <!-- Previous Workouts Section -->
     <section class="workouts-section">
-      <h2>Previous Workouts</h2>
-      <div class="workouts-container">
-        <!-- Content for previous workouts will go here -->
+      <div class="plans-wrapper">
+        <h2>Previous Workouts</h2>
+        <div class="plans-container" ref="previousWorkoutsContainer">
+          <div 
+            v-for="workout in previousWorkouts" 
+            :key="workout.id" 
+            class="plan-tile"
+          >
+            <div class="menu-button">
+              <button @click.stop="toggleMenu(workout.id, 'workout')" class="dots-button">⋮</button>
+              <div v-if="menuStates.workouts[workout.id]" class="menu">
+                <button @click="showDeleteConfirmationModal(workout.id, 'workout')">Delete</button>
+              </div>
+            </div>
+            <h3>{{ workout.name }}</h3>
+            <p>{{ workout.description }}</p>
+            <p><strong>Date:</strong> {{ workout.date }}</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -88,10 +104,94 @@ const workoutPlans = ref([]);
 const plansContainer = ref(null);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
-const menuStates = ref({});
-
+const menuStates = ref({
+  plans: {},
+  workouts: {}
+});
+const workoutTypeToDelete = ref(null);
 const showDeleteConfirmation = ref(false);
 const workoutPlanToDelete = ref(null);
+
+const deleteWorkout = async (id) => {
+  try {
+    const profileId = localStorage.getItem('selectedProfileId');
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workouts/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    });
+
+    if (!response.ok) throw new Error('Failed to delete workout');
+    fetchPreviousWorkouts(); // Refresh the list of previous workouts after deletion
+  } catch (error) {
+    console.error('Error deleting workout:', error);
+  } finally {
+    cancelDelete(); // Close the confirmation modal
+  }
+};
+
+const previousWorkouts = ref([]); // Store the last 7 workouts
+
+// Fetch previous workouts
+const fetchPreviousWorkouts = async () => {
+  try {
+    const profileId = localStorage.getItem("selectedProfileId");
+    if (!profileId) {
+      throw new Error("No profile selected");
+    }
+    const token = localStorage.getItem("token");
+    const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workouts`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch workouts");
+    }
+
+    const workouts = await response.json();
+
+    // Sort workouts by date and start_time in descending order
+    previousWorkouts.value = workouts
+      .sort((a, b) => {
+        // First compare dates
+        const dateComparison = new Date(b.date) - new Date(a.date);
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+        
+        // If dates are equal, compare start times
+        if (a.start_time && b.start_time) {
+          const timeA = a.start_time.split(':').map(Number);
+          const timeB = b.start_time.split(':').map(Number);
+          
+          // Compare hours
+          if (timeB[0] !== timeA[0]) {
+            return timeB[0] - timeA[0];
+          }
+          // Compare minutes
+          if (timeB[1] !== timeA[1]) {
+            return timeB[1] - timeA[1];
+          }
+          // Compare seconds
+          return timeB[2] - timeA[2];
+        }
+        
+        // If one of the times is missing, put it at the end
+        if (!a.start_time) return 1;
+        if (!b.start_time) return -1;
+        return 0;
+      })
+      .slice(0, 7);  // Take the last 7 workouts
+  } catch (error) {
+    console.error("Error fetching previous workouts:", error);
+  }
+};
 
 const startWorkout = async (plan) => {
   try {
@@ -198,8 +298,16 @@ const editWorkout = (plan) => {
  addWorkoutModal.value.initializeEditForm(plan);
 };
 
-const toggleMenu = (planId) => {
-  menuStates.value[planId] = !menuStates.value[planId];
+const toggleMenu = (id, type) => {
+  if (type === 'plan') {
+    menuStates.value.plans[id] = !menuStates.value.plans[id];
+    // Reset workout menus when plan menu is toggled
+    menuStates.value.workouts = {};
+  } else if (type === 'workout') {
+    menuStates.value.workouts[id] = !menuStates.value.workouts[id];
+    // Reset plan menus when workout menu is toggled
+    menuStates.value.plans = {};
+  }
 };
 
 const openAddWorkoutModal = () => {
@@ -226,34 +334,57 @@ const fetchWorkoutPlans = async () => {
   }
 };
 
-const showDeleteConfirmationModal = (id) => {
-  workoutPlanToDelete.value = id;
+const showDeleteConfirmationModal = (id, type) => {
+  workoutPlanToDelete.value = id; // Use the correct ref here
+  workoutTypeToDelete.value = type; // Save the type of the workout (plan or workout)
   showDeleteConfirmation.value = true;
 };
 
 const confirmDeleteWorkout = async () => {
-  if (!workoutPlanToDelete.value) return;
+  if (!workoutPlanToDelete.value || !workoutTypeToDelete.value) return;
 
   try {
     const profileId = localStorage.getItem('selectedProfileId');
     const token = localStorage.getItem('token');
-    await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutPlanToDelete.value}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      }
-    });
-    fetchWorkoutPlans();
+
+    let response;
+
+    if (workoutTypeToDelete.value === 'plan') {
+      response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workout_plans/${workoutPlanToDelete.value}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+    } else if (workoutTypeToDelete.value === 'workout') {
+      response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/workouts/${workoutPlanToDelete.value}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+    }
+
+    if (!response.ok) throw new Error('Failed to delete workout');
+    
+    // Refresh the lists based on the type
+    if (workoutTypeToDelete.value === 'plan') {
+      fetchWorkoutPlans();
+    } else if (workoutTypeToDelete.value === 'workout') {
+      fetchPreviousWorkouts();
+    }
+
   } catch (error) {
     console.error('Error deleting workout:', error);
   } finally {
-    cancelDelete();
+    cancelDelete(); // Close the confirmation modal
   }
 };
 
 const cancelDelete = () => {
-  workoutPlanToDelete.value = null;
-  showDeleteConfirmation.value = false;
+  workoutPlanToDelete.value = null; // Clear the workout ID
+  workoutTypeToDelete.value = null; // Clear the workout type
+  showDeleteConfirmation.value = false; // Close the confirmation modal
 };
 
 const checkScroll = () => {
@@ -278,6 +409,7 @@ const scrollRight = () => {
 
 onMounted(() => {
   fetchWorkoutPlans();
+  fetchPreviousWorkouts();
   checkScroll();
   window.addEventListener('resize', checkScroll);
   if (plansContainer.value) {
@@ -285,7 +417,8 @@ onMounted(() => {
   };
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-button')) {
-      menuStates.value = {};
+      menuStates.value.plans = {};
+      menuStates.value.workouts = {};
     }
   });
 });
@@ -538,4 +671,5 @@ h2 {
 .menu button:hover {
  background: rgba(255, 255, 255, 0.1);
 }
+
 </style>

@@ -2,6 +2,23 @@ from pydantic import BaseModel, model_validator, ConfigDict, Field
 from typing import List, Optional
 from enum import Enum
 
+class ExercisesBase(BaseModel):
+    name: str
+    force: Optional[str] = None
+    level: Optional[str] = None
+    mechanic: Optional[str] = None
+    equipment: Optional[str] = None
+    primaryMuscles: Optional[List[str]] = None
+    secondaryMuscles: Optional[List[str]] = None
+    instructions: Optional[List[str]] = None
+    category: Optional[str] = None
+    picture: Optional[str] = None
+    recorded_type: Optional[str] = None
+
+class Exercises(ExercisesBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+    
 # Base set schemas
 class WorkoutSetBase(BaseModel):
     reps: Optional[int] = None
@@ -34,6 +51,9 @@ class WorkoutExerciseCreate(WorkoutExerciseBase):
 
 class WorkoutExercise(WorkoutExerciseBase):
     id: int
+    sets: List[WorkoutSet] = []
+    exercise: Optional[Exercises] = None
+    exercise_id: int
     sets: List[WorkoutSet] = []
 
     class Config:
@@ -91,3 +111,6 @@ class WorkoutExerciseSchema(BaseModel):
     workout_id: int
     sets: List[WorkoutSet] = []
     model_config = ConfigDict(from_attributes=True)
+
+Workout.model_rebuild()
+WorkoutExercise.model_rebuild()
