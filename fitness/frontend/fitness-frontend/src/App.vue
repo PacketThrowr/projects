@@ -39,12 +39,10 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   background-color: var(--background-color);
-  overflow-x: auto;
 }
 
 #app {
   width: 100%;
-  min-width: fit-content;
   overflow-x: hidden;
 }
 

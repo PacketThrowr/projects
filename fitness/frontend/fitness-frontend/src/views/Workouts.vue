@@ -48,8 +48,15 @@
 
     <!-- Previous Workouts Section -->
     <section class="workouts-section">
+      <h2>Previous Workouts</h2>
       <div class="plans-wrapper">
-        <h2>Previous Workouts</h2>
+        <button 
+          class="scroll-button left" 
+          @click="scrollLeftPrevious"
+          :class="{ 'visible': canScrollLeftPrevious }"
+        >
+          &#8592;
+        </button>
         <div class="plans-container" ref="previousWorkoutsContainer">
           <div 
             v-for="workout in previousWorkouts" 
@@ -62,11 +69,24 @@
                 <button @click="showDeleteConfirmationModal(workout.id, 'workout')">Delete</button>
               </div>
             </div>
-            <h3>{{ workout.name }}</h3>
-            <p>{{ workout.description }}</p>
-            <p><strong>Date:</strong> {{ workout.date }}</p>
+            <div class="workout-content">
+              <h3>{{ workout.name }}</h3>
+              <p>{{ workout.description }}</p>
+              <div class="workout-details">
+                <p><strong>Date:</strong> {{ workout.date }}</p>
+                <p v-if="workout.start_time"><strong>Start:</strong> {{ workout.start_time }}</p>
+                <p v-if="workout.end_time"><strong>End:</strong> {{ workout.end_time }}</p>
+              </div>
+            </div>
           </div>
         </div>
+        <button 
+          class="scroll-button right" 
+          @click="scrollRightPrevious"
+          :class="{ 'visible': canScrollRightPrevious }"
+        >
+          &#8594;
+        </button>
       </div>
     </section>
 
@@ -102,6 +122,9 @@ import { API_BASE_URL } from '../config';
 const addWorkoutModal = ref(null);
 const workoutPlans = ref([]);
 const plansContainer = ref(null);
+const previousWorkoutsContainer = ref(null);
+const canScrollLeftPrevious = ref(false);
+const canScrollRightPrevious = ref(false);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
 const menuStates = ref({
@@ -111,6 +134,26 @@ const menuStates = ref({
 const workoutTypeToDelete = ref(null);
 const showDeleteConfirmation = ref(false);
 const workoutPlanToDelete = ref(null);
+
+const checkScrollPrevious = () => {
+  if (previousWorkoutsContainer.value) {
+    const { scrollLeft, scrollWidth, clientWidth } = previousWorkoutsContainer.value;
+    canScrollLeftPrevious.value = scrollLeft > 0;
+    canScrollRightPrevious.value = scrollLeft < scrollWidth - clientWidth;
+  }
+};
+
+const scrollLeftPrevious = () => {
+  if (previousWorkoutsContainer.value) {
+    previousWorkoutsContainer.value.scrollBy({ left: -300, behavior: 'smooth' });
+  }
+};
+
+const scrollRightPrevious = () => {
+  if (previousWorkoutsContainer.value) {
+    previousWorkoutsContainer.value.scrollBy({ left: 300, behavior: 'smooth' });
+  }
+};
 
 const deleteWorkout = async (id) => {
   try {
@@ -411,10 +454,17 @@ onMounted(() => {
   fetchWorkoutPlans();
   fetchPreviousWorkouts();
   checkScroll();
-  window.addEventListener('resize', checkScroll);
+  checkScrollPrevious()
+  window.addEventListener('resize', () => {
+    checkScroll();
+    checkScrollPrevious();
+  });
   if (plansContainer.value) {
     plansContainer.value.addEventListener('scroll', checkScroll);
   };
+  if (previousWorkoutsContainer.value) { // Add this
+    previousWorkoutsContainer.value.addEventListener('scroll', checkScrollPrevious);
+  }
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-button')) {
       menuStates.value.plans = {};
@@ -427,7 +477,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', checkScroll);
   if (plansContainer.value) {
     plansContainer.value.removeEventListener('scroll', checkScroll);
-  };
+  }
+  if (previousWorkoutsContainer.value) { // Add this
+    previousWorkoutsContainer.value.removeEventListener('scroll', checkScrollPrevious);
+  }
   document.removeEventListener('click');
 });
 </script>
@@ -486,6 +539,7 @@ h1 {
   position: relative;
   background-color: var(--menu-bar-color);
 }
+
 h2 {
   color: var(--text-color);
   margin-bottom: 1rem;
@@ -511,7 +565,6 @@ h2 {
   position: relative;
   padding: 1rem;
 }
-
 .plans-container {
   display: flex;
   gap: 1rem;
@@ -520,6 +573,7 @@ h2 {
   scrollbar-width: none;
   width: 100%;
   padding: 0 2rem;
+  box-sizing: border-box; /* Add this */
 }
 
 .plans-container::-webkit-scrollbar {
@@ -534,14 +588,13 @@ h2 {
   border: 1px solid rgba(255, 255, 255, 0.1);
   text-align: center;
   height: 200px;
-
+  min-width: 300px;
   /* Flexbox for centering content */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden; /* Prevent content overflow */
 }
 
 .plan-tile h3 {
@@ -595,7 +648,12 @@ h2 {
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.3s;
-  z-index: 1;
+  z-index: 2; /* Increase z-index */
+  width: 30px; /* Add fixed width */
+  height: 30px; /* Add fixed height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .scroll-button.visible {
@@ -603,30 +661,37 @@ h2 {
 }
 
 .scroll-button.left {
-  left: 1rem;
+  left: 0;
 }
 
 .scroll-button.right {
-  right: 1rem;
+  right: 0;
 }
 
 .scroll-button:hover {
   background-color: rgba(0, 0, 0, 0.7);
 }
 
-@media (max-width: 480px) {
- .plan-tile {
-   width: calc(100% - 2rem);
-   min-width: unset;
-   flex: 0 0 auto;
- }
- 
- .plans-container {
-   padding: 0 1rem;
- }
+@media (max-width: 768px) {
+  .workouts-page {
+    padding: 0 1rem;
+  }
 
+  .plans-container {
+    padding: 0 1rem;
+  }
 
+  .plan-tile {
+    flex: 0 0 250px; /* Slightly smaller on mobile */
+  }
 }
+
+@media (max-width: 480px) {
+  .plan-tile {
+    flex: 0 0 200px; /* Even smaller on very small screens */
+  }
+}
+
 .workouts-section h2 {
   padding: 0 1rem;
 }
